@@ -207,6 +207,48 @@ h1 {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
+.service-link-area {
+  margin-top: 1.6rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+}
+
+.service-link-button {
+  border: 0;
+  background: transparent;
+  color: rgba(210, 228, 246, 0.78);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(210, 228, 246, 0.45);
+  text-underline-offset: 0.12rem;
+}
+
+.service-link-button:hover {
+  color: rgba(246, 251, 255, 0.92);
+  text-decoration-color: rgba(246, 251, 255, 0.7);
+}
+
+.service-link-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 0.35rem;
+}
+
+.service-link-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.service-link-error {
+  margin: 0;
+  color: rgba(255, 192, 192, 0.95);
+  font-size: 0.76rem;
+}
+
 @media (max-width: 700px) {
   .page {
     width: min(1120px, 94vw);

@@ -1,11 +1,27 @@
-import { environment } from '../../environments/environment';
+import { Injectable, inject } from '@angular/core';
+import { RuntimeSecretsService } from '../services/runtime-secrets.service';
 
-const API_BASE_URL = environment.API_URL;
-const API_PREFIX = `${API_BASE_URL}/api`;
+@Injectable({ providedIn: 'root' })
+export class ApiEndpointsService {
+  private readonly runtimeSecrets = inject(RuntimeSecretsService);
 
-export const API_ENDPOINTS = {
-  products: `${API_PREFIX}/objects/products`,
-  stock: `${API_PREFIX}/stock`,
-  stockVolatile: `${API_PREFIX}/stock/volatile`,
-  productPictureByBase64: (encodedFileName: string): string => `${API_PREFIX}/files/productpictures/${encodedFileName}`
-} as const;
+  products(): string {
+    return `${this.apiPrefix}/objects/products`;
+  }
+
+  stock(): string {
+    return `${this.apiPrefix}/stock`;
+  }
+
+  stockVolatile(): string {
+    return `${this.apiPrefix}/stock/volatile`;
+  }
+
+  productPictureByBase64(encodedFileName: string): string {
+    return `${this.apiPrefix}/files/productpictures/${encodedFileName}`;
+  }
+
+  private get apiPrefix(): string {
+    return `${this.runtimeSecrets.apiUrl}/api`;
+  }
+}

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
-import { API_ENDPOINTS } from '../../api/api-endpoints';
+import { ApiEndpointsService } from '../../api/api-endpoints';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import {
@@ -64,6 +64,7 @@ interface YukaScoreView {
 })
 export class MacroCategoryPage {
     private readonly http = inject(HttpClient);
+    private readonly apiEndpoints = inject(ApiEndpointsService);
     private readonly route = inject(ActivatedRoute);
     private readonly router = inject(Router);
     private readonly destroyRef = inject(DestroyRef);
@@ -301,9 +302,9 @@ export class MacroCategoryPage {
         this.pictureFailed.set({});
 
         forkJoin({
-            products: this.http.get<Item[]>(API_ENDPOINTS.products, { context: withHttpCache(true) }),
+            products: this.http.get<Item[]>(this.apiEndpoints.products(), { context: withHttpCache(true) }),
             stock: this.http
-                .get<StockEntry[]>(API_ENDPOINTS.stock, { context: withHttpCache(true) })
+                .get<StockEntry[]>(this.apiEndpoints.stock(), { context: withHttpCache(true) })
                 .pipe(catchError(() => of([])))
         }).subscribe({
             next: ({ products, stock }) => {
@@ -352,7 +353,7 @@ export class MacroCategoryPage {
         this.pictureLoading.set(loadingState);
 
         for (const fileName of pictureFileNames) {
-            const pictureEndpoint = API_ENDPOINTS.productPictureByBase64(this.encodeFileNameToBase64(fileName));
+            const pictureEndpoint = this.apiEndpoints.productPictureByBase64(this.encodeFileNameToBase64(fileName));
 
             this.http
                 .get(pictureEndpoint, { responseType: 'blob', context: withHttpCache(true) })

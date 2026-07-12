@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
-import { API_ENDPOINTS } from '../../api/api-endpoints';
+import { ApiEndpointsService } from '../../api/api-endpoints';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import {
@@ -63,6 +63,7 @@ interface VolatileViewItem extends Item {
 })
 export class StockVolatilePage {
   private readonly http = inject(HttpClient);
+  private readonly apiEndpoints = inject(ApiEndpointsService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -281,7 +282,7 @@ export class StockVolatilePage {
     this.pictureFailed.set({});
 
     this.http
-      .get<VolatileStockResponse>(API_ENDPOINTS.stockVolatile, { context: withHttpCache(true) })
+      .get<VolatileStockResponse>(this.apiEndpoints.stockVolatile(), { context: withHttpCache(true) })
       .subscribe({
         next: (response) => {
           if (!response || typeof response !== 'object') {
@@ -318,7 +319,7 @@ export class StockVolatilePage {
     this.pictureLoading.set(loadingState);
 
     for (const fileName of pictureFileNames) {
-      const pictureEndpoint = API_ENDPOINTS.productPictureByBase64(this.encodeFileNameToBase64(fileName));
+      const pictureEndpoint = this.apiEndpoints.productPictureByBase64(this.encodeFileNameToBase64(fileName));
 
       this.http
         .get(pictureEndpoint, { responseType: 'blob', context: withHttpCache(true) })

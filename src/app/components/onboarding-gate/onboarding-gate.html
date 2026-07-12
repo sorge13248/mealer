@@ -1,0 +1,82 @@
+@if (isInitializing()) {
+  <main class="setup-page" aria-live="polite" aria-busy="true">
+    <section class="setup-shell setup-shell-loading">
+      <section class="setup-card">
+        <p class="setup-kicker">Mealer Setup</p>
+        <h1>Inizializzazione configurazione</h1>
+        <p class="setup-subtitle">Recupero dei parametri locali in corso.</p>
+        <app-loading-spinner label="Caricamento configurazione"></app-loading-spinner>
+      </section>
+    </section>
+  </main>
+} @else if (!isConfigured()) {
+  <main class="setup-page">
+    <section class="setup-shell" aria-labelledby="setup-title">
+      <aside class="setup-side-panel" aria-hidden="true">
+        <p class="setup-kicker">Mealer Setup</p>
+        <h2>Connetti il tuo Grocy in pochi secondi</h2>
+        <p>
+          I parametri vengono memorizzati localmente in forma cifrata nel browser. Potrai modificarli quando vuoi.
+        </p>
+        <ul class="setup-benefits">
+          <li>Nessun secret hardcoded nel codice</li>
+          <li>Configurazione per dispositivo/browser</li>
+          <li>Ripristino rapido da interfaccia</li>
+        </ul>
+      </aside>
+
+      <section class="setup-card">
+        <h1 id="setup-title">Configura l'accesso API</h1>
+        <p class="setup-subtitle">Inserisci URL API e API key per iniziare.</p>
+
+        <form class="setup-form" [formGroup]="setupForm" (ngSubmit)="saveSecrets()" novalidate>
+          <label class="setup-field">
+            <span>API URL</span>
+            <input
+              type="url"
+              formControlName="apiUrl"
+              placeholder="https://grocy.example.com"
+              autocomplete="url"
+              required
+            />
+            @if (setupForm.controls.apiUrl.touched && setupForm.controls.apiUrl.invalid) {
+              <small class="setup-help-error">Inserisci un URL valido del server API.</small>
+            } @else {
+              <small class="setup-help">Usa l'URL base del tuo Grocy, senza slash finale.</small>
+            }
+          </label>
+
+          <label class="setup-field">
+            <span>API Key</span>
+            <input
+              type="password"
+              formControlName="apiKey"
+              placeholder="Inserisci la chiave API"
+              autocomplete="off"
+              required
+            />
+            @if (setupForm.controls.apiKey.touched && setupForm.controls.apiKey.invalid) {
+              <small class="setup-help-error">La API key è obbligatoria.</small>
+            } @else {
+              <small class="setup-help">La chiave viene cifrata e salvata localmente.</small>
+            }
+          </label>
+
+          @if (setupError(); as errorMessage) {
+            <p class="setup-error" role="alert">{{ errorMessage }}</p>
+          }
+
+          <button type="submit" class="setup-submit" [disabled]="isSaving()">
+            @if (isSaving()) {
+              Salvataggio...
+            } @else {
+              Salva e continua
+            }
+          </button>
+        </form>
+      </section>
+    </section>
+  </main>
+} @else {
+  <router-outlet></router-outlet>
+}

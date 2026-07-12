@@ -2,9 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
-import { API_ENDPOINTS } from '../../api/api-endpoints';
+import { ApiEndpointsService } from '../../api/api-endpoints';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
+import { RuntimeSecretsService } from '../../services/runtime-secrets.service';
+import { SecureSecretsStorageService } from '../../services/secure-secrets-storage.service';
 import {
     VIRTUAL_NO_MACROCATEGORY_KEY,
     VIRTUAL_NO_MACROCATEGORY_TITLE
@@ -38,6 +40,8 @@ interface ParsedMacroCategory {
     subtitle: string | null;
 }
 
+const ONBOARDING_VERSION_KEY = 'mealer-onboarding-completed-v1';
+
 @Component({
     selector: 'app-home-page',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -47,10 +51,15 @@ interface ParsedMacroCategory {
 })
 export class HomePage {
     private readonly http = inject(HttpClient);
+    private readonly apiEndpoints = inject(ApiEndpointsService);
     private readonly router = inject(Router);
+    private readonly runtimeSecrets = inject(RuntimeSecretsService);
+    private readonly secureSecretsStorage = inject(SecureSecretsStorageService);
 
     protected readonly isLoading = signal(true);
     protected readonly errorMessage = signal<string | null>(null);
+    protected readonly resetErrorMessage = signal<string | null>(null);
+    protected readonly isResettingSecrets = signal(false);
     protected readonly items = signal<Item[]>([]);
     protected readonly volatileStock = signal<VolatileStockResponse | null>(null);
 
@@ -136,17 +145,34 @@ export class HomePage {
         return categoryKey === VIRTUAL_NO_MACROCATEGORY_KEY;
     }
 
+    protected async resetSecretsFromHome(): Promise<void> {
+        this.isResettingSecrets.set(true);
+        this.resetErrorMessage.set(null);
+
+        try {
+            await this.secureSecretsStorage.clearSecrets();
+            this.runtimeSecrets.clearSecrets();
+            localStorage.removeItem(ONBOARDING_VERSION_KEY);
+            await this.router.navigateByUrl('/', { replaceUrl: true });
+            window.location.reload();
+        } catch {
+            this.resetErrorMessage.set('Impossibile reimpostare i secret. Riprova.');
+        } finally {
+            this.isResettingSecrets.set(false);
+        }
+    }
+
     private loadItems(): void {
         this.isLoading.set(true);
         this.errorMessage.set(null);
 
         forkJoin({
-            products: this.http.get<Item[]>(API_ENDPOINTS.products, { context: withHttpCache(true) }),
+            products: this.http.get<Item[]>(this.apiEndpoints.products(), { context: withHttpCache(true) }),
             stock: this.http
-                .get<unknown[]>(API_ENDPOINTS.stock, { context: withHttpCache(true) })
+                .get<unknown[]>(this.apiEndpoints.stock(), { context: withHttpCache(true) })
                 .pipe(catchError(() => of([]))),
             volatile: this.http
-                .get<VolatileStockResponse>(API_ENDPOINTS.stockVolatile, { context: withHttpCache(true) })
+                .get<VolatileStockResponse>(this.apiEndpoints.stockVolatile(), { context: withHttpCache(true) })
                 .pipe(catchError(() => of([])))
         }).subscribe({
             next: ({ products, volatile }) => {
