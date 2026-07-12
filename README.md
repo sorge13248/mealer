@@ -1,59 +1,107 @@
 # Mealer
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.19.
+### Smart pantry browsing for Grocy, with category navigation and stock-priority views
 
-## Development server
+Mealer is an Angular web app that connects to a Grocy instance and helps you browse products by macro category, check expiring/missing items, and inspect stock data with a fast visual workflow.
 
-To start a local development server, run:
+## Features
 
-```bash
-ng serve
-```
+- Guided onboarding at first access with API URL and API key validation via `GET /api/system/info`
+- Secure local secret storage in the browser (encrypted at rest via Web Crypto + IndexedDB)
+- Home page grouped by `food_macrocategory`, including a virtual "Senza macrocategoria" section
+- Dedicated macro-category page with product cards, score badges, stock details, and image loading states
+- Dedicated volatile stock page for due, expired, and missing products
+- API key interceptor and optional HTTP response caching
+- Multi-architecture production container image build (`linux/amd64`, `linux/arm64`) via GitHub Actions
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Local development
 
-## Code scaffolding
+### 1. Prerequisites
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+- Node.js `24.15.0` or newer supported by the current Angular CLI
+- npm (bundled with Node.js)
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+If you use nvm:
 
 ```bash
-ng build
+source ~/.nvm/nvm.sh
+nvm install 24.15.0
+nvm use 24.15.0
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+### 2. Install dependencies
 
 ```bash
-ng test
+npm ci
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+### 3. Run the app
 
 ```bash
-ng e2e
+npm start
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Open `http://localhost:4200`.
 
-## Additional Resources
+At first launch, the onboarding screen asks for:
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Grocy base URL
+- Grocy API key
+
+The values are validated before save, then stored locally in encrypted form.
+
+### 4. Build and test
+
+```bash
+npm run build
+npm test
+```
+
+## Production deployment
+
+### Option A: Docker (recommended)
+
+Build local image:
+
+```bash
+docker build -t mealer:prod .
+```
+
+Run container:
+
+```bash
+docker run --rm -p 8080:8080 mealer:prod
+```
+
+Notes:
+
+- Runtime image uses `nginx:alpine`
+- Container runs as non-root user
+- App is served on port `8080`
+
+### Option B: GitHub Actions + GHCR
+
+Workflow file: `.github/workflows/docker-multiarch.yml`
+
+On push to `main` (and on schedule/manual trigger), CI builds multi-arch images and publishes to GHCR:
+
+- `ghcr.io/sorge13248/mealer:latest`
+- additional tags based on branch/tag/sha
+
+Pull example:
+
+```bash
+docker pull ghcr.io/sorge13248/mealer:latest
+```
+
+If the package is private, authenticate first:
+
+```bash
+docker login ghcr.io
+```
+
+## License
+
+This project is licensed under the GNU General Public License v3.0.
+
+See [LICENSE](LICENSE).
