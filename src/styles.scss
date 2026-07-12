@@ -1,0 +1,59 @@
+html,
+body {
+	margin: 0;
+	min-height: 100%;
+}
+
+:root {
+	--ink-0: #f6fbff;
+	--ink-1: #d2e4f6;
+	--ink-2: #aac4dc;
+	--glass-border: rgba(51, 122, 183, 0.34);
+	--glass-fill: rgba(51, 122, 183, 0.12);
+	--glass-fill-strong: rgba(51, 122, 183, 0.2);
+	--focus-ring: rgba(51, 122, 183, 0.92);
+}
+
+body {
+	position: relative;
+	overflow-x: hidden;
+	color: var(--ink-0);
+	font-family: "SF Pro Display", "Segoe UI", sans-serif;
+	background:
+		radial-gradient(1100px 700px at 5% -20%, rgba(136, 198, 255, 0.42) 0%, rgba(56, 95, 143, 0) 58%),
+		radial-gradient(950px 660px at 100% 0%, rgba(74, 127, 183, 0.55) 0%, rgba(11, 26, 50, 0) 60%),
+		linear-gradient(170deg, #0d1f35 0%, #102a48 48%, #0e2440 100%);
+}
+
+app-root {
+	position: relative;
+	display: block;
+	min-height: 100dvh;
+	overflow: hidden;
+}
+
+body::before,
+body::after {
+	content: "";
+	position: fixed;
+	z-index: 0;
+	pointer-events: none;
+	border-radius: 50%;
+	filter: blur(40px);
+}
+
+body::before {
+	width: 40rem;
+	height: 40rem;
+	top: -16rem;
+	right: -10rem;
+	background: radial-gradient(circle at 35% 35%, rgba(164, 220, 255, 0.34), rgba(51, 122, 183, 0));
+}
+
+body::after {
+	width: 32rem;
+	height: 32rem;
+	left: -10rem;
+	bottom: -14rem;
+	background: radial-gradient(circle at 60% 45%, rgba(51, 122, 183, 0.38), rgba(51, 122, 183, 0));
+}

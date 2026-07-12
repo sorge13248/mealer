@@ -1,0 +1,39 @@
+<main class="page">
+  <header class="page-header">
+    <p class="lead">Componi il tuo pasto in modo sano</p>
+    <h1>Mealer</h1>
+  </header>
+
+  @if (isLoading()) {
+    <section class="status-panel" aria-live="polite" aria-busy="true">
+      <app-loading-spinner label="Caricamento categorie"></app-loading-spinner>
+    </section>
+  } @else if (errorMessage()) {
+    <section class="status-panel status-panel-error" aria-live="assertive">
+      <p>{{ errorMessage() }}</p>
+      <button type="button" class="retry-button" (click)="reloadItems()">Riprova</button>
+    </section>
+  } @else if (categoryCards().length === 0) {
+    <section class="status-panel" aria-live="polite">
+      <p>Nessuna categoria trovata nella risposta API.</p>
+    </section>
+  } @else {
+    <section class="category-grid" aria-label="Macrocategorie alimentari">
+      @for (category of categoryCards(); track category.key) {
+        <button
+          type="button"
+          class="category-card"
+          [class.category-card-muted]="isVirtualNoMacroCategory(category.key)"
+          [attr.aria-label]="category.title"
+          (click)="openCategory(category.key)"
+        >
+          <span class="category-title">{{ category.title }}</span>
+          @if (category.subtitle) {
+            <span class="category-subtitle">{{ category.subtitle }}</span>
+          }
+          <span class="category-count">{{ category.itemCount }} alimenti</span>
+        </button>
+      }
+    </section>
+  }
+</main>

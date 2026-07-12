@@ -1,0 +1,64 @@
+:host {
+  display: grid;
+  place-items: center;
+  min-height: 5rem;
+}
+
+.spinner-shell {
+  position: relative;
+  width: 3.2rem;
+  height: 3.2rem;
+  display: grid;
+  place-items: center;
+}
+
+.spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.spinner-ring-outer {
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.88);
+  animation: spin 980ms linear infinite;
+}
+
+.spinner-ring-inner {
+  inset: 0.45rem;
+  border: 2px solid rgba(51, 122, 183, 0.28);
+  border-right-color: rgba(51, 122, 183, 0.95);
+  animation: spin-reverse 740ms linear infinite;
+}
+
+.spinner-core {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: rgba(51, 122, 183, 0.95);
+  box-shadow: 0 0 18px rgba(51, 122, 183, 0.55);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
