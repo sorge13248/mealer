@@ -6,5 +6,6 @@ const API_PREFIX = `${API_BASE_URL}/api`;
 export const API_ENDPOINTS = {
   products: `${API_PREFIX}/objects/products`,
   stock: `${API_PREFIX}/stock`,
+  stockVolatile: `${API_PREFIX}/stock/volatile`,
   productPictureByBase64: (encodedFileName: string): string => `${API_PREFIX}/files/productpictures/${encodedFileName}`
 } as const;

@@ -9,5 +9,10 @@ export const routes: Routes = [
 		path: 'macrocategoria/:macroCategory',
 		loadComponent: () =>
 			import('./pages/macro-category/macro-category-page').then((module) => module.MacroCategoryPage)
+	},
+	{
+		path: 'stock-volatile/:section',
+		loadComponent: () =>
+			import('./pages/stock-volatile/stock-volatile-page').then((module) => module.StockVolatilePage)
 	}
 ];

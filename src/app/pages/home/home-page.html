@@ -18,6 +18,26 @@
       <p>Nessuna categoria trovata nella risposta API.</p>
     </section>
   } @else {
+    @if (hasDueProducts() || hasExpiredProducts() || hasMissingProducts()) {
+      <section class="volatile-actions" aria-label="Azioni rapide stock volatile">
+        @if (hasDueProducts()) {
+          <button type="button" class="volatile-action-button" (click)="openVolatileSection('due')">
+            In scadenza
+          </button>
+        }
+        @if (hasExpiredProducts()) {
+          <button type="button" class="volatile-action-button volatile-action-button-danger" (click)="openVolatileSection('expired')">
+            Scaduti
+          </button>
+        }
+        @if (hasMissingProducts()) {
+          <button type="button" class="volatile-action-button volatile-action-button-warning" (click)="openVolatileSection('missing')">
+            Mancanti
+          </button>
+        }
+      </section>
+    }
+
     <section class="category-grid" aria-label="Macrocategorie alimentari">
       @for (category of categoryCards(); track category.key) {
         <button

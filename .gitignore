@@ -5,11 +5,17 @@
 /tmp
 /out-tsc
 /bazel-out
+/storybook-static
 
 # Node
 /node_modules
 npm-debug.log
+yarn-debug.log
 yarn-error.log
+pnpm-debug.log*
+.npm/
+.pnpm-store/
+.yarn/
 
 # IDEs and editors
 .idea/
@@ -34,10 +40,19 @@ yarn-error.log
 .sass-cache/
 /connect.lock
 /coverage
+/test-results/
+/playwright-report/
+/blob-report/
 /libpeerconnection.log
 testem.log
 /typings
 __screenshots__/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+*.local
 
 # System files
 .DS_Store

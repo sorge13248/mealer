@@ -9,14 +9,21 @@ import {
     VIRTUAL_NO_MACROCATEGORY_KEY,
     VIRTUAL_NO_MACROCATEGORY_TITLE
 } from '../macro-category/macro-category.constants';
+import { Item } from '../shared/product-shared';
 
-interface ItemUserFields {
-    food_macrocategory?: string | null;
+interface VolatileStockProductEntry {
+    product_id: number | string;
 }
 
-interface Item {
-    id: number;
-    userfields?: ItemUserFields | null;
+interface VolatileMissingProductEntry {
+    id: number | string;
+}
+
+interface VolatileStockResponse {
+    due_products?: VolatileStockProductEntry[] | null;
+    overdue_products?: VolatileStockProductEntry[] | null;
+    expired_products?: VolatileStockProductEntry[] | null;
+    missing_products?: VolatileMissingProductEntry[] | null;
 }
 
 interface MacroCategoryCard {
@@ -45,6 +52,7 @@ export class HomePage {
     protected readonly isLoading = signal(true);
     protected readonly errorMessage = signal<string | null>(null);
     protected readonly items = signal<Item[]>([]);
+    protected readonly volatileStock = signal<VolatileStockResponse | null>(null);
 
     protected readonly categoryCards = computed<MacroCategoryCard[]>(() => {
         const groupedCategories = new Map<string, MacroCategoryCard>();
@@ -104,12 +112,24 @@ export class HomePage {
         this.loadItems();
     }
 
+    protected readonly hasDueProducts = computed(() => (this.volatileStock()?.due_products?.length ?? 0) > 0);
+    protected readonly hasExpiredProducts = computed(
+        () =>
+            (this.volatileStock()?.expired_products?.length ?? 0) > 0 ||
+            (this.volatileStock()?.overdue_products?.length ?? 0) > 0
+    );
+    protected readonly hasMissingProducts = computed(() => (this.volatileStock()?.missing_products?.length ?? 0) > 0);
+
     protected reloadItems(): void {
         this.loadItems();
     }
 
     protected openCategory(macroCategory: string): void {
         this.router.navigate(['/macrocategoria', encodeURIComponent(macroCategory)]);
+    }
+
+    protected openVolatileSection(section: 'due' | 'expired' | 'missing'): void {
+        this.router.navigate(['/stock-volatile', section]);
     }
 
     protected isVirtualNoMacroCategory(categoryKey: string): boolean {
@@ -124,25 +144,35 @@ export class HomePage {
             products: this.http.get<Item[]>(API_ENDPOINTS.products, { context: withHttpCache(true) }),
             stock: this.http
                 .get<unknown[]>(API_ENDPOINTS.stock, { context: withHttpCache(true) })
+                .pipe(catchError(() => of([]))),
+            volatile: this.http
+                .get<VolatileStockResponse>(API_ENDPOINTS.stockVolatile, { context: withHttpCache(true) })
                 .pipe(catchError(() => of([])))
         }).subscribe({
-            next: ({ products }) => {
+            next: ({ products, volatile }) => {
                 if (!Array.isArray(products)) {
                     this.items.set([]);
+                    this.volatileStock.set(null);
                     this.errorMessage.set('Il formato della risposta API non e valido.');
                     this.isLoading.set(false);
                     return;
                 }
 
                 this.items.set(products);
+                this.volatileStock.set(this.isVolatileResponse(volatile) ? volatile : null);
                 this.isLoading.set(false);
             },
             error: () => {
                 this.items.set([]);
+                this.volatileStock.set(null);
                 this.errorMessage.set('Impossibile caricare gli alimenti. Riprova.');
                 this.isLoading.set(false);
             }
         });
+    }
+
+    private isVolatileResponse(value: unknown): value is VolatileStockResponse {
+        return Boolean(value) && typeof value === 'object';
     }
 
     private parseMacroCategory(macroCategory: string): ParsedMacroCategory {

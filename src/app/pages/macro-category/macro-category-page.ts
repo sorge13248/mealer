@@ -7,6 +7,14 @@ import { API_ENDPOINTS } from '../../api/api-endpoints';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import {
+    buildStockSummaryByProductId,
+    formatBestBeforeDate as formatBestBeforeDateLocal,
+    getDaysUntilBestBeforeLabel as getDaysUntilBestBeforeLabelLocal,
+    getNormalizedYukaScore as getNormalizedYukaScoreLocal,
+    getYukaScoreView as getYukaScoreViewLocal,
+    toBestBeforeTime as toBestBeforeTimeLocal
+} from '../shared/product-shared';
+import {
     VIRTUAL_NO_MACROCATEGORY_KEY,
     VIRTUAL_NO_MACROCATEGORY_TITLE
 } from './macro-category.constants';
@@ -62,7 +70,6 @@ export class MacroCategoryPage {
     private readonly localDateFormatter = new Intl.DateTimeFormat(navigator.language, {
         dateStyle: 'medium'
     });
-    private readonly oneDayInMs = 24 * 60 * 60 * 1000;
 
     protected readonly isLoading = signal(true);
     protected readonly errorMessage = signal<string | null>(null);
@@ -131,33 +138,7 @@ export class MacroCategoryPage {
     });
 
     protected readonly stockSummaryByProductId = computed<Map<number, ProductStockSummary>>(() => {
-        const stockSummaryMap = new Map<number, ProductStockSummary>();
-
-        for (const stockEntry of this.stockEntries()) {
-            const productId = this.toNumber(stockEntry.product_id);
-            if (productId === null) {
-                continue;
-            }
-
-            const currentSummary =
-                stockSummaryMap.get(productId) ?? {
-                    amount: 0,
-                    amountOpened: 0,
-                    nearestBestBeforeDate: null
-                };
-
-            const amount = this.toNumber(stockEntry.amount) ?? 0;
-            const amountOpened = this.toNumber(stockEntry.amount_opened) ?? 0;
-            const bestBeforeDate = stockEntry.best_before_date?.trim() || null;
-
-            stockSummaryMap.set(productId, {
-                amount: currentSummary.amount + amount,
-                amountOpened: currentSummary.amountOpened + amountOpened,
-                nearestBestBeforeDate: this.getNearestBestBeforeDate(currentSummary.nearestBestBeforeDate, bestBeforeDate)
-            });
-        }
-
-        return stockSummaryMap;
+        return buildStockSummaryByProductId(this.stockEntries());
     });
 
     constructor() {
@@ -228,56 +209,15 @@ export class MacroCategoryPage {
     }
 
     protected formatBestBeforeDate(bestBeforeDate: string | null): string | null {
-        const parsedDate = this.parseDateOnly(bestBeforeDate);
-        if (!parsedDate) {
-            return null;
-        }
-
-        return this.localDateFormatter.format(parsedDate);
+        return formatBestBeforeDateLocal(bestBeforeDate, this.localDateFormatter);
     }
 
     protected getDaysUntilBestBeforeLabel(bestBeforeDate: string | null): string | null {
-        const parsedDate = this.parseDateOnly(bestBeforeDate);
-        if (!parsedDate) {
-            return null;
-        }
-
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-
-        const daysUntil = Math.round((parsedDate.getTime() - startOfToday.getTime()) / this.oneDayInMs);
-
-        if (daysUntil === 0) {
-            return 'scade oggi';
-        }
-
-        if (daysUntil < 0) {
-            const daysExpired = Math.abs(daysUntil);
-            return daysExpired === 1 ? 'scaduto da 1 giorno' : `scaduto da ${daysExpired} giorni`;
-        }
-
-        return daysUntil === 1 ? 'fra 1 giorno' : `fra ${daysUntil} giorni`;
+        return getDaysUntilBestBeforeLabelLocal(bestBeforeDate);
     }
 
     protected getYukaScoreView(item: Item): YukaScoreView | null {
-        const rawYukaScore = item.userfields?.yuka_score;
-        if (rawYukaScore === null || rawYukaScore === undefined || rawYukaScore === '') {
-            return null;
-        }
-
-        const parsedYukaScore =
-            typeof rawYukaScore === 'number' ? rawYukaScore : Number(rawYukaScore.trim().replace(',', '.'));
-        if (Number.isNaN(parsedYukaScore)) {
-            return null;
-        }
-
-        const clampedYukaScore = Math.min(100, Math.max(0, Math.round(parsedYukaScore)));
-        const yukaHue = (clampedYukaScore / 100) * 120;
-
-        return {
-            value: clampedYukaScore,
-            color: `hsl(${yukaHue} 74% 46%)`
-        };
+        return getYukaScoreViewLocal(item);
     }
 
     protected isPreviewVisible(): boolean {
@@ -528,69 +468,10 @@ export class MacroCategoryPage {
     }
 
     private getNormalizedYukaScore(item: Item): number | null {
-        const rawYukaScore = item.userfields?.yuka_score;
-        if (rawYukaScore === null || rawYukaScore === undefined || rawYukaScore === '') {
-            return null;
-        }
-
-        const parsedYukaScore =
-            typeof rawYukaScore === 'number' ? rawYukaScore : Number(rawYukaScore.trim().replace(',', '.'));
-        if (Number.isNaN(parsedYukaScore)) {
-            return null;
-        }
-
-        return Math.min(100, Math.max(0, Math.round(parsedYukaScore)));
-    }
-
-    private toNumber(value: number | string | null | undefined): number | null {
-        if (value === null || value === undefined || value === '') {
-            return null;
-        }
-
-        const parsedValue =
-            typeof value === 'number' ? value : Number(value.trim().replace(',', '.'));
-
-        return Number.isNaN(parsedValue) ? null : parsedValue;
+        return getNormalizedYukaScoreLocal(item);
     }
 
     private toBestBeforeTime(bestBeforeDate: string | null): number {
-        const parsedDate = this.parseDateOnly(bestBeforeDate);
-        if (!parsedDate) {
-            return Number.POSITIVE_INFINITY;
-        }
-
-        return parsedDate.getTime();
-    }
-
-    private getNearestBestBeforeDate(currentDate: string | null, candidateDate: string | null): string | null {
-        const currentTime = this.toBestBeforeTime(currentDate);
-        const candidateTime = this.toBestBeforeTime(candidateDate);
-
-        if (candidateTime < currentTime) {
-            return candidateDate;
-        }
-
-        return currentDate;
-    }
-
-    private parseDateOnly(value: string | null): Date | null {
-        if (!value) {
-            return null;
-        }
-
-        const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!match) {
-            return null;
-        }
-
-        const [, yearValue, monthValue, dayValue] = match;
-        const year = Number(yearValue);
-        const month = Number(monthValue);
-        const day = Number(dayValue);
-        if ([year, month, day].some(Number.isNaN)) {
-            return null;
-        }
-
-        return new Date(year, month - 1, day);
+        return toBestBeforeTimeLocal(bestBeforeDate);
     }
 }
