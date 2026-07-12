@@ -38,9 +38,6 @@
                 (pointerenter)="onImagePointerEnter($event, pictureUrl, item.name)"
                 (pointermove)="onImagePointerMove($event, pictureUrl, item.name)"
                 (pointerleave)="onImagePointerLeave($event)"
-                (pointerdown)="onImagePointerDown($event, pictureUrl, item.name)"
-                (pointerup)="onImagePointerUp($event)"
-                (pointercancel)="onImagePointerCancel($event)"
               />
             } @else {
               <div class="item-image item-image-placeholder" aria-hidden="true">

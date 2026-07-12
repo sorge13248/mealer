@@ -83,9 +83,6 @@ export class StockVolatilePage {
   protected readonly previewImageAlt = signal('');
   protected readonly previewPosition = signal<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  private previewTouchPointerId: number | null = null;
-  private touchLongPressTimer: number | null = null;
-
   protected readonly sectionTitle = computed(() => {
     switch (this.section()) {
       case 'due':
@@ -141,7 +138,6 @@ export class StockVolatilePage {
 
   constructor() {
     this.destroyRef.onDestroy(() => {
-      this.clearTouchLongPressTimer();
       this.clearPictureObjectUrls();
     });
 
@@ -222,11 +218,6 @@ export class StockVolatilePage {
   protected onImagePointerMove(event: PointerEvent, imageUrl: string, itemName: string): void {
     if (event.pointerType === 'mouse') {
       this.showImagePreview(imageUrl, itemName, event.clientX, event.clientY);
-      return;
-    }
-
-    if (event.pointerType === 'touch' && this.previewTouchPointerId === event.pointerId && this.isPreviewVisible()) {
-      this.setPreviewPosition(event.clientX, event.clientY);
     }
   }
 
@@ -236,42 +227,6 @@ export class StockVolatilePage {
     }
 
     this.hideImagePreview();
-  }
-
-  protected onImagePointerDown(event: PointerEvent, imageUrl: string, itemName: string): void {
-    if (event.pointerType !== 'touch') {
-      return;
-    }
-
-    this.clearTouchLongPressTimer();
-    this.previewTouchPointerId = event.pointerId;
-    this.touchLongPressTimer = window.setTimeout(() => {
-      this.showImagePreview(imageUrl, itemName, event.clientX, event.clientY);
-    }, 320);
-  }
-
-  protected onImagePointerUp(event: PointerEvent): void {
-    if (event.pointerType !== 'touch') {
-      return;
-    }
-
-    this.clearTouchLongPressTimer();
-    if (this.previewTouchPointerId === event.pointerId) {
-      this.previewTouchPointerId = null;
-      this.hideImagePreview();
-    }
-  }
-
-  protected onImagePointerCancel(event: PointerEvent): void {
-    if (event.pointerType !== 'touch') {
-      return;
-    }
-
-    this.clearTouchLongPressTimer();
-    if (this.previewTouchPointerId === event.pointerId) {
-      this.previewTouchPointerId = null;
-      this.hideImagePreview();
-    }
   }
 
   private loadVolatileStock(): void {
@@ -497,10 +452,4 @@ export class StockVolatilePage {
     });
   }
 
-  private clearTouchLongPressTimer(): void {
-    if (this.touchLongPressTimer !== null) {
-      clearTimeout(this.touchLongPressTimer);
-      this.touchLongPressTimer = null;
-    }
-  }
 }
