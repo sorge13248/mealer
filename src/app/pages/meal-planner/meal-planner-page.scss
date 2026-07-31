@@ -1,0 +1,791 @@
+$accent: #337ab7;
+$accent-rgb: 51, 122, 183;
+$green: #4caf83;
+$green-rgb: 76, 175, 131;
+$amber: #d7b35c;
+$amber-rgb: 215, 179, 92;
+$red: #dc6666;
+$red-rgb: 220, 102, 102;
+
+@mixin focus-ring($offset: 2px) {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: $offset;
+}
+
+@mixin pill-button {
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 92vw);
+  margin: 0 auto;
+  padding: 2.9rem 0 3.6rem;
+  display: grid;
+  gap: 1.1rem;
+}
+
+// ─── Shared glass panel mixin ──────────────────────────────────────────────
+%glass-panel {
+  border-radius: 1.5rem;
+  padding: 1.3rem 1.35rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), var(--glass-fill) 48%, rgba(8, 23, 44, 0.35) 100%);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(19, 54, 90, 0.45),
+    0 18px 60px rgba(3, 10, 22, 0.5);
+}
+
+// ─── Page header ──────────────────────────────────────────────────────────
+.page-header {
+  @extend %glass-panel;
+}
+
+h1 {
+  margin: 0.48rem 0 0.38rem;
+  font-size: clamp(1.95rem, 4.7vw, 3.2rem);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  text-shadow: 0 8px 20px rgba(4, 12, 24, 0.32);
+}
+
+.lead {
+  margin: 0;
+  color: var(--ink-1);
+}
+
+.back-button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  padding: 0;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  letter-spacing: 0.02em;
+
+  &:hover {
+    color: var(--ink-0);
+  }
+
+  &:focus-visible {
+    @include focus-ring(3px);
+    border-radius: 4px;
+  }
+}
+
+// ─── Status / loading panel ───────────────────────────────────────────────
+.status-panel {
+  @extend %glass-panel;
+
+  p { margin: 0; }
+}
+
+.status-panel-error {
+  border-color: rgba($red, 0.75);
+}
+
+.retry-button {
+  margin-top: 0.9rem;
+  border: 1px solid rgba($accent, 0.92);
+  background: rgba($accent, 0.24);
+  color: #eef8ff;
+  @include pill-button;
+  padding: 0.5rem 0.95rem;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 26px rgba(8, 21, 38, 0.42);
+
+  &:hover { background: rgba($accent, 0.36); }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+// ─── Mapping setup ────────────────────────────────────────────────────────
+.mapping-card {
+  @extend %glass-panel;
+}
+
+.mapping-intro {
+  margin: 0 0 0.95rem;
+  color: var(--ink-1);
+  font-size: 0.9rem;
+  max-width: 65ch;
+}
+
+.mapping-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.mapping-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.58rem;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.mapping-label {
+  color: var(--ink-0);
+  font-size: 0.86rem;
+  font-weight: 620;
+}
+
+.mapping-select {
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-0);
+  padding: 0.44rem 0.56rem;
+  font-size: 0.84rem;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.mapping-save-button {
+  justify-self: start;
+  border: 1px solid rgba($accent, 0.9);
+  background: rgba($accent, 0.28);
+  color: #eef8ff;
+  @include pill-button;
+  padding: 0.48rem 0.95rem;
+  font-weight: 640;
+
+  &:hover:enabled {
+    background: rgba($accent, 0.38);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+// ─── Completeness card ────────────────────────────────────────────────────
+.completeness-card {
+  @extend %glass-panel;
+  display: grid;
+  gap: 1rem;
+}
+
+.completeness-card-complete {
+  border-color: rgba($green, 0.55);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba($green, 0.1) 48%, rgba(8, 23, 44, 0.35) 100%);
+}
+
+.completeness-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+// Progress ring
+.completeness-score-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+}
+
+.score-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 4;
+}
+
+.score-ring-fill {
+  fill: none;
+  stroke: rgba($accent, 0.9);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 125.66;
+  stroke-dashoffset: 125.66;
+  transition: stroke-dashoffset 400ms ease;
+}
+
+.score-ring-fill-complete {
+  stroke: rgba($green, 0.95);
+}
+
+.score-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--ink-0);
+  letter-spacing: -0.02em;
+}
+
+.completeness-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.completeness-title {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 660;
+  color: var(--ink-0);
+}
+
+.completeness-title-ok {
+  color: rgba($green, 0.95);
+}
+
+.completeness-subtitle {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--ink-1);
+}
+
+.clear-button {
+  align-self: flex-start;
+  margin-left: auto;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink-2);
+  @include pill-button;
+  padding: 0.32rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  transition: background 150ms;
+
+  &:hover { background: rgba(255, 255, 255, 0.13); }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.save-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  align-self: flex-start;
+  border: 1px solid rgba($accent, 0.9);
+  background: rgba($accent, 0.28);
+  color: #eef8ff;
+  @include pill-button;
+  padding: 0.32rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 620;
+  transition: background 150ms;
+
+  &:hover {
+    background: rgba($accent, 0.38);
+  }
+
+  &:disabled {
+    opacity: 0.62;
+    cursor: not-allowed;
+  }
+
+  &:hover:disabled {
+    background: rgba($accent, 0.28);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.delete-save-button {
+  align-self: flex-start;
+  border: 1px solid rgba($red, 0.62);
+  background: rgba($red, 0.16);
+  color: #ffe9e9;
+  @include pill-button;
+  padding: 0.32rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 620;
+  transition: background 150ms;
+
+  &:hover {
+    background: rgba($red, 0.26);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.save-button-success {
+  border-color: rgba($green, 0.9);
+  background: rgba($green, 0.32);
+  color: #ecfff3;
+
+  &:hover {
+    background: rgba($green, 0.42);
+  }
+}
+
+.save-button-icon {
+  width: 0.92rem;
+  height: 0.92rem;
+}
+
+// ─── Rules list ───────────────────────────────────────────────────────────
+.rules-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.83rem;
+}
+
+.rule-item-ok {
+  border-color: rgba($green, 0.4);
+  background: rgba($green, 0.1);
+}
+
+.rule-item-required {
+  border-color: rgba($red, 0.45);
+  background: rgba($red, 0.1);
+}
+
+.rule-item-recommended {
+  border-color: rgba($amber, 0.4);
+  background: rgba($amber, 0.08);
+}
+
+.rule-item-optional {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.rule-icon {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  width: 1.1rem;
+  text-align: center;
+
+  .rule-item-ok & { color: rgba($green, 0.95); }
+  .rule-item-required & { color: rgba($red, 0.9); }
+  .rule-item-recommended & { color: rgba($amber, 0.9); }
+  .rule-item-optional & { color: var(--ink-2); }
+}
+
+.rule-text {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.rule-label {
+  color: var(--ink-0);
+  font-weight: 600;
+}
+
+.rule-tip {
+  color: var(--ink-2);
+  font-size: 0.78rem;
+}
+
+// ─── Selected summary ─────────────────────────────────────────────────────
+.selected-summary {
+  @extend %glass-panel;
+}
+
+.section-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.selected-items-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.selected-item-entry {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.selected-item-remove {
+  justify-self: start;
+  border: 1px solid rgba($red, 0.62);
+  background: rgba($red, 0.18);
+  color: #ffe9e9;
+  @include pill-button;
+  padding: 0.34rem 0.76rem;
+  font-size: 0.78rem;
+  font-weight: 620;
+  transition: background 150ms;
+
+  &:hover {
+    background: rgba($red, 0.28);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+// ─── Categories section ───────────────────────────────────────────────────
+.categories-section {
+  @extend %glass-panel;
+}
+
+.category-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.7rem;
+}
+
+.category-card {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+  color: var(--ink-0);
+  cursor: pointer;
+  transition:
+    transform 150ms,
+    background 150ms,
+    border-color 150ms;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.category-card-base {
+  border-color: rgba($green, 0.45);
+  background: rgba($green, 0.1);
+}
+
+.category-card-daily {
+  border-color: rgba($accent, 0.5);
+  background: rgba($accent, 0.1);
+}
+
+.category-card-weekly {
+  border-color: rgba($amber, 0.5);
+  background: rgba($amber, 0.1);
+}
+
+.category-card-occasional {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.category-card-title {
+  font-size: 0.95rem;
+  font-weight: 670;
+}
+
+.category-card-meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.category-selected-count {
+  color: var(--ink-1);
+  font-size: 0.75rem;
+}
+
+.category-pyramid-badge {
+  font-size: 0.67rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.18rem 0.52rem;
+  border: 1px solid currentColor;
+}
+
+.pyramid-badge-base {
+  color: rgba($green, 0.9);
+  border-color: rgba($green, 0.45);
+  background: rgba($green, 0.1);
+}
+
+.pyramid-badge-daily {
+  color: rgba($accent, 0.95);
+  border-color: rgba($accent, 0.45);
+  background: rgba($accent, 0.1);
+}
+
+.pyramid-badge-weekly {
+  color: rgba($amber, 0.9);
+  border-color: rgba($amber, 0.4);
+  background: rgba($amber, 0.08);
+}
+
+.pyramid-badge-occasional {
+  color: var(--ink-2);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.category-toggle-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.category-item-count {
+  font-size: 0.72rem;
+  font-weight: 650;
+  border-radius: 999px;
+  background: rgba($accent, 0.28);
+  color: #edf7ff;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid rgba($accent, 0.55);
+}
+
+.category-chevron {
+  font-size: 0.6rem;
+  color: var(--ink-2);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgba(2, 7, 17, 0.72);
+}
+
+.category-modal {
+  position: fixed;
+  z-index: 20;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1100px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 1.3rem;
+  padding: 1rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), var(--glass-fill) 48%, rgba(8, 23, 44, 0.35) 100%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(19, 54, 90, 0.45),
+    0 28px 70px rgba(3, 10, 22, 0.65);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.category-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.category-modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--ink-0);
+}
+
+.category-modal-subtitle {
+  margin: 0;
+  color: var(--ink-1);
+  font-size: 0.85rem;
+}
+
+.modal-items-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.modal-item-entry {
+  display: grid;
+  gap: 0.45rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.35rem;
+}
+
+.modal-item-clickable {
+  cursor: pointer;
+  transition:
+    border-color 140ms,
+    background 140ms,
+    transform 140ms;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba($green, 0.4);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.modal-item-entry-selected {
+  border-color: rgba($green, 0.72);
+  background: rgba($green, 0.2);
+  box-shadow:
+    inset 0 0 0 1px rgba($green, 0.25),
+    0 10px 24px rgba(26, 66, 34, 0.25);
+}
+
+.category-modal-actions {
+  position: sticky;
+  bottom: -1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin: 0 -1rem -1rem;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(8, 22, 41, 0.95);
+}
+
+.category-modal-counter {
+  margin: 0;
+  color: var(--ink-1);
+  font-size: 0.82rem;
+}
+
+.category-modal-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.modal-cancel-button,
+.modal-confirm-button {
+  @include pill-button;
+  padding: 0.45rem 0.85rem;
+  font-weight: 620;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.modal-cancel-button {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink-1);
+}
+
+.modal-confirm-button {
+  border: 1px solid rgba($accent, 0.9);
+  background: rgba($accent, 0.3);
+  color: #eef8ff;
+}
+
+@media (max-width: 1260px) {
+  .selected-items-grid,
+  .modal-items-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .selected-items-grid,
+  .modal-items-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  .category-modal {
+    width: 96vw;
+    max-height: 92vh;
+    padding: 0.85rem;
+  }
+
+  .category-modal-actions {
+    bottom: -0.85rem;
+    margin: 0 -0.85rem -0.85rem;
+    padding: 0.7rem 0.85rem 0.85rem;
+  }
+
+  .category-modal-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .modal-items-grid {
+    grid-template-columns: 1fr;
+  }
+}

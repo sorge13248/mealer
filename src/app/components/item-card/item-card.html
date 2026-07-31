@@ -1,0 +1,96 @@
+<article class="item-card">
+  @if (hasPicture()) {
+    @if (isPictureLoading()) {
+      <div class="item-image item-image-loading" aria-live="polite" aria-busy="true">
+        <app-loading-spinner label="Caricamento immagine"></app-loading-spinner>
+      </div>
+    } @else if (pictureUrl(); as resolvedPictureUrl) {
+      <img
+        class="item-image"
+        [src]="resolvedPictureUrl"
+        [alt]="'Immagine di ' + item().name"
+        loading="lazy"
+        decoding="async"
+      />
+    } @else {
+      <div class="item-image item-image-placeholder" aria-hidden="true">
+        @if (didPictureFail()) {
+          Immagine non disponibile
+        } @else {
+          Nessuna immagine
+        }
+      </div>
+    }
+  } @else {
+    <div class="item-image item-image-placeholder" aria-hidden="true">Nessuna immagine</div>
+  }
+
+  <h2>{{ item().name }}</h2>
+
+  @if (yukaScore(); as resolvedYukaScore) {
+    <div
+      class="yuka-score"
+      [style.--yuka-color]="resolvedYukaScore.color"
+      [attr.aria-label]="'Punteggio Yuka ' + resolvedYukaScore.value + ' su 100'"
+    >
+      <span class="yuka-score-label">Punteggio Yuka</span>
+      <span class="yuka-score-value">{{ resolvedYukaScore.value }}/100</span>
+      <span class="yuka-score-track">
+        <span class="yuka-score-fill" [style.width.%]="resolvedYukaScore.value"></span>
+      </span>
+    </div>
+  }
+
+  @if (item().description) {
+    <p>{{ item().description }}</p>
+  }
+
+  <div class="stock-summary" aria-label="Dati stock prodotto">
+    @if (amountMissing() !== null) {
+      <span class="stock-pill stock-pill-warning">Mancano: {{ amountMissing() }}</span>
+    } @else if (stockSummary(); as resolvedStockSummary) {
+      <span class="stock-pill">Pezzi: {{ resolvedStockSummary.amount }}</span>
+      <span class="stock-pill">Aperti: {{ resolvedStockSummary.amountOpened }}</span>
+      @if (formattedBestBeforeDate()) {
+        <span class="stock-pill stock-pill-date">
+          Scadenza: {{ formattedBestBeforeDate() }}
+          @if (daysUntilBestBeforeLabel()) {
+            ({{ daysUntilBestBeforeLabel() }})
+          }
+        </span>
+      }
+    }
+  </div>
+
+  <div class="card-actions">
+    @if (canConsume()) {
+      <button
+        type="button"
+        class="consume-button"
+        [class.consume-button-success]="isConsumedRecently()"
+        [disabled]="isConsuming()"
+        (click)="consumeOne()"
+        [attr.aria-label]="'Consuma una unita di ' + item().name"
+      >
+        @if (isConsumedRecently()) {
+          <svg [lucideIcon]="checkIcon" class="consume-button-icon" aria-hidden="true"></svg>
+        }
+        {{ isConsuming() ? 'Consumo...' : isConsumedRecently() ? 'Consumato' : 'Consuma 1' }}
+      </button>
+    }
+
+    <a
+      class="grocy-link-button"
+      [href]="grocyProductUrl()"
+      target="_blank"
+      rel="noopener noreferrer"
+      [attr.aria-label]="'Apri ' + item().name + ' nella pagina prodotto di Grocy'"
+    >
+      Apri in Grocy
+    </a>
+  </div>
+
+  @if (consumeError(); as errorMessage) {
+    <p class="consume-error" role="alert">{{ errorMessage }}</p>
+  }
+</article>

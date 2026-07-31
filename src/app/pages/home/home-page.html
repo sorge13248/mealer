@@ -38,6 +38,16 @@
       </section>
     }
 
+    <section class="planner-banner" aria-label="Pianificatore pasto">
+      <div class="planner-banner-text">
+        <p class="planner-banner-title">Pianifica il tuo pasto</p>
+        <p class="planner-banner-subtitle">Componi un pasto equilibrato seguendo la dieta mediterranea</p>
+      </div>
+      <button type="button" class="planner-banner-button" (click)="openMealPlanner()" aria-label="Apri il pianificatore pasto">
+        Inizia →
+      </button>
+    </section>
+
     <section class="category-grid" aria-label="Macrocategorie alimentari">
       @for (category of categoryCards(); track category.key) {
         <button

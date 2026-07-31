@@ -14,5 +14,10 @@ export const routes: Routes = [
 		path: 'stock-volatile/:section',
 		loadComponent: () =>
 			import('./pages/stock-volatile/stock-volatile-page').then((module) => module.StockVolatilePage)
+	},
+	{
+		path: 'pianificatore-pasto',
+		loadComponent: () =>
+			import('./pages/meal-planner/meal-planner-page').then((module) => module.MealPlannerPage)
 	}
 ];

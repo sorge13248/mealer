@@ -11,6 +11,10 @@ import {
     VIRTUAL_NO_MACROCATEGORY_KEY,
     VIRTUAL_NO_MACROCATEGORY_TITLE
 } from '../macro-category/macro-category.constants';
+import {
+    isExcludedMacroCategory,
+    parseMacroCategoryName
+} from '../shared/macro-category-mapping';
 import { Item } from '../shared/product-shared';
 
 interface VolatileStockProductEntry {
@@ -33,11 +37,6 @@ interface MacroCategoryCard {
     title: string;
     subtitle: string | null;
     itemCount: number;
-}
-
-interface ParsedMacroCategory {
-    title: string;
-    subtitle: string | null;
 }
 
 const ONBOARDING_VERSION_KEY = 'mealer-onboarding-completed-v1';
@@ -74,6 +73,11 @@ export class HomePage {
                 continue;
             }
 
+            const parsedCategory = parseMacroCategoryName(macroCategory);
+            if (isExcludedMacroCategory(macroCategory)) {
+                continue;
+            }
+
             const existingCard = groupedCategories.get(macroCategory);
             if (existingCard) {
                 groupedCategories.set(macroCategory, {
@@ -83,7 +87,6 @@ export class HomePage {
                 continue;
             }
 
-            const parsedCategory = this.parseMacroCategory(macroCategory);
             groupedCategories.set(macroCategory, {
                 key: macroCategory,
                 title: parsedCategory.title,
@@ -135,6 +138,10 @@ export class HomePage {
 
     protected openCategory(macroCategory: string): void {
         this.router.navigate(['/macrocategoria', encodeURIComponent(macroCategory)]);
+    }
+
+    protected openMealPlanner(): void {
+        this.router.navigate(['/pianificatore-pasto']);
     }
 
     protected openVolatileSection(section: 'due' | 'expired' | 'missing'): void {
@@ -201,20 +208,4 @@ export class HomePage {
         return Boolean(value) && typeof value === 'object';
     }
 
-    private parseMacroCategory(macroCategory: string): ParsedMacroCategory {
-        const macroCategoryWithSubtitleRegex = /^(.*?)\s*\((.+)\)\s*$/;
-        const matchedParts = macroCategory.match(macroCategoryWithSubtitleRegex);
-        if (!matchedParts) {
-            return {
-                title: macroCategory,
-                subtitle: null
-            };
-        }
-
-        const [, title, subtitle] = matchedParts;
-        return {
-            title: title.trim(),
-            subtitle: subtitle.trim()
-        };
-    }
 }

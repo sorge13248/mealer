@@ -1,0 +1,230 @@
+<main class="page">
+  <header class="page-header">
+    <button type="button" class="back-button" (click)="goBack()" aria-label="Torna alla home">
+      ← Indietro
+    </button>
+    <p class="lead">Dieta Mediterranea</p>
+    <h1>Pianificatore Pasto</h1>
+  </header>
+
+  @if (isLoading()) {
+    <section class="status-panel" aria-live="polite" aria-busy="true">
+      <app-loading-spinner label="Caricamento alimenti"></app-loading-spinner>
+    </section>
+  } @else if (errorMessage()) {
+    <section class="status-panel status-panel-error" aria-live="assertive">
+      <p>{{ errorMessage() }}</p>
+      <button type="button" class="retry-button" (click)="reloadItems()">Riprova</button>
+    </section>
+  } @else if (requiresCategoryMapping()) {
+    <section class="mapping-card" aria-live="polite" aria-label="Configurazione categorie">
+      <h2 class="section-title">Configura categorie Grocy</h2>
+      <p class="mapping-intro">
+        Al primo avvio devi indicare come mappare le categorie personalizzate di Grocy verso
+        quelle usate dal planner.
+      </p>
+
+      <form class="mapping-form" (submit)="$event.preventDefault(); saveCategoryMapping()">
+        <ul class="mapping-list" role="list">
+          @for (apiCategory of apiCategories(); track apiCategory.key) {
+            <li class="mapping-row">
+              <label
+                class="mapping-label"
+                [for]="getCategoryMappingControlId(apiCategory.key)"
+              >
+                {{ apiCategory.label }}
+              </label>
+              <select
+                class="mapping-select"
+                [id]="getCategoryMappingControlId(apiCategory.key)"
+                [value]="getCategoryMappingValue(apiCategory.key)"
+                (change)="onCategoryMappingChange(apiCategory.key, $event)"
+              >
+                <option value="">Seleziona categoria</option>
+                @for (option of knownCategoryOptions; track option.key) {
+                  <option [value]="option.key">{{ option.label }}</option>
+                }
+              </select>
+            </li>
+          }
+        </ul>
+
+        <button
+          type="submit"
+          class="mapping-save-button"
+          [disabled]="!canSaveCategoryMapping()"
+        >
+          Conferma mapping
+        </button>
+      </form>
+    </section>
+  } @else {
+    <section class="completeness-card" [class.completeness-card-complete]="isComplete()" aria-label="Stato del pasto">
+      <div class="completeness-header">
+        <div class="completeness-score-wrap" role="img" [attr.aria-label]="'Completezza pasto: ' + completionScore() + '%'">
+          <svg class="score-ring" viewBox="0 0 48 48" aria-hidden="true">
+            <circle class="score-ring-track" cx="24" cy="24" r="20" />
+            <circle
+              class="score-ring-fill"
+              [class.score-ring-fill-complete]="isComplete()"
+              cx="24"
+              cy="24"
+              r="20"
+              [style.stroke-dashoffset]="125.66 - (125.66 * completionScore() / 100)"
+            />
+          </svg>
+          <span class="score-ring-label">{{ completionScore() }}%</span>
+        </div>
+        <div class="completeness-meta">
+          @if (isComplete()) {
+            <p class="completeness-title completeness-title-ok">Pasto equilibrato!</p>
+            <p class="completeness-subtitle">Rispetta i principi della dieta mediterranea.</p>
+          } @else if (selectedItems().length === 0) {
+            <p class="completeness-title">Nessun alimento selezionato</p>
+            <p class="completeness-subtitle">Scegli gli alimenti del tuo pasto dalle categorie qui sotto.</p>
+          } @else {
+            <p class="completeness-title">Pasto incompleto</p>
+            <p class="completeness-subtitle">Mancano ancora alcuni elementi fondamentali.</p>
+          }
+        </div>
+        @if (selectedItems().length > 0 || hasPersistedMealSelection()) {
+          <div class="header-actions">
+            <button
+              type="button"
+              class="save-button"
+              [class.save-button-success]="isMealSelectionSaved()"
+              (click)="saveMealSelection()"
+              [disabled]="selectedItems().length === 0"
+            >
+              @if (isMealSelectionSaved()) {
+                <span class="save-button-icon" aria-hidden="true">✓</span>
+              }
+              {{ isMealSelectionSaved() ? 'Salvato' : 'Salva selezione' }}
+            </button>
+            @if (hasPersistedMealSelection()) {
+              <button type="button" class="delete-save-button" (click)="clearSavedMealSelection()">
+                Cancella salvataggio
+              </button>
+            }
+            @if (selectedItems().length > 0) {
+              <button type="button" class="clear-button" (click)="clearMeal()">Svuota</button>
+            }
+          </div>
+        }
+      </div>
+
+      <ul class="rules-list" aria-label="Regole del pasto">
+        @for (rule of mealRules(); track rule.id) {
+          <li
+            class="rule-item"
+            [class.rule-item-ok]="rule.satisfied"
+            [class.rule-item-required]="rule.priority === 'required' && !rule.satisfied"
+            [class.rule-item-recommended]="rule.priority === 'recommended' && !rule.satisfied"
+            [class.rule-item-optional]="rule.priority === 'optional' && !rule.satisfied"
+          >
+            <span class="rule-icon" aria-hidden="true">{{ rule.satisfied ? '✓' : rule.priority === 'required' ? '!' : rule.priority === 'recommended' ? '·' : '○' }}</span>
+            <span class="rule-text">
+              <span class="rule-label">{{ rule.label }}</span>
+              @if (!rule.satisfied) {
+                <span class="rule-tip">{{ rule.tip }}</span>
+              }
+            </span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    @if (selectedItems().length > 0) {
+      <section class="selected-summary" aria-label="Alimenti nel pasto">
+        <h2 class="section-title">Il tuo pasto</h2>
+        <ul class="selected-items-grid" role="list">
+          @for (item of selectedItems(); track item.id) {
+            <li class="selected-item-entry">
+              <app-item-card [item]="item"></app-item-card>
+              <button
+                type="button"
+                class="selected-item-remove"
+                (click)="toggleItem(item)"
+                [attr.aria-label]="'Rimuovi ' + item.name + ' dal pasto'"
+              >
+                Rimuovi dal pasto
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <section class="categories-section" aria-label="Categorie alimentari">
+      <h2 class="section-title">Aggiungi alimenti</h2>
+
+      <div class="category-cards-grid">
+        @for (group of categoryGroups(); track group.key) {
+          <button
+            type="button"
+            class="category-card"
+            [class]="'category-card-' + group.pyramidLevel"
+            (click)="openCategoryModal(group)"
+            [attr.aria-label]="'Apri categoria ' + group.label"
+          >
+            <span class="category-card-title">{{ group.label }}</span>
+            <span class="category-pyramid-badge" [class]="'pyramid-badge-' + group.pyramidLevel">
+              {{ group.pyramidLevelLabel }}
+            </span>
+            <span class="category-card-meta">
+              <span class="category-item-count">{{ getAvailableCountForCategory(group.key) }} alimenti</span>
+              <span class="category-selected-count">
+                {{ getSelectedCountForCategory(group.key) }} nel pasto
+              </span>
+            </span>
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (activeModalCategory()) {
+      <div class="modal-backdrop" (click)="closeCategoryModal()" aria-hidden="true"></div>
+      <section
+        class="category-modal"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="'Seleziona alimenti per ' + activeModalCategory()!.label"
+      >
+        <header class="category-modal-header">
+          <h3 class="category-modal-title">{{ activeModalCategory()!.label }}</h3>
+          <span class="category-pyramid-badge" [class]="'pyramid-badge-' + activeModalCategory()!.pyramidLevel">
+            {{ activeModalCategory()!.pyramidLevelLabel }}
+          </span>
+        </header>
+
+        <p class="category-modal-subtitle">
+          Seleziona gli alimenti da aggiungere al pasto, poi conferma.
+        </p>
+
+        <ul class="modal-items-grid" role="list" [attr.aria-label]="'Alimenti in ' + activeModalCategory()!.label">
+          @for (item of modalSortedItems(); track item.id) {
+            <li
+              class="modal-item-entry modal-item-clickable"
+              [class.modal-item-entry-selected]="isModalItemSelected(item.id)"
+              [attr.aria-pressed]="isModalItemSelected(item.id)"
+              role="button"
+              tabindex="0"
+              (click)="onModalItemCardClick(item.id, $event)"
+              (keydown)="onModalItemCardKeydown(item.id, $event)"
+            >
+              <app-item-card [item]="item" (consumed)="onModalItemConsumed($event)"></app-item-card>
+            </li>
+          }
+        </ul>
+
+        <footer class="category-modal-actions">
+          <p class="category-modal-counter">{{ modalSelectionCount() }} selezionati</p>
+          <div class="category-modal-buttons">
+            <button type="button" class="modal-cancel-button" (click)="closeCategoryModal()">Annulla</button>
+            <button type="button" class="modal-confirm-button" (click)="confirmModalSelection()">Conferma</button>
+          </div>
+        </footer>
+      </section>
+    }
+  }
+</main>

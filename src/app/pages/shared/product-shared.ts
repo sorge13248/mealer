@@ -24,6 +24,11 @@ export interface ProductStockSummary {
   nearestBestBeforeDate: string | null;
 }
 
+export interface ItemWithStockSummary extends Item {
+  stockSummary: ProductStockSummary;
+  amountMissing: null;
+}
+
 export interface YukaScoreView {
   value: number;
   color: string;
@@ -172,4 +177,59 @@ export function getDaysUntilBestBeforeLabel(bestBeforeDate: string | null): stri
   }
 
   return daysUntil === 1 ? 'fra 1 giorno' : `fra ${daysUntil} giorni`;
+}
+
+type StockSortableItem = Pick<Item, 'name' | 'userfields'> & {
+  stockSummary: ProductStockSummary;
+};
+
+export function compareItemsByStockAndYuka(leftItem: StockSortableItem, rightItem: StockSortableItem): number {
+  const leftBestBeforeTime = toBestBeforeTime(leftItem.stockSummary.nearestBestBeforeDate);
+  const rightBestBeforeTime = toBestBeforeTime(rightItem.stockSummary.nearestBestBeforeDate);
+
+  if (leftBestBeforeTime !== rightBestBeforeTime) {
+    return leftBestBeforeTime - rightBestBeforeTime;
+  }
+
+  const leftScore = getNormalizedYukaScore(leftItem);
+  const rightScore = getNormalizedYukaScore(rightItem);
+
+  if (leftScore === null && rightScore === null) {
+    return leftItem.name.localeCompare(rightItem.name);
+  }
+
+  if (leftScore === null) {
+    return 1;
+  }
+
+  if (rightScore === null) {
+    return -1;
+  }
+
+  if (leftScore !== rightScore) {
+    return rightScore - leftScore;
+  }
+
+  return leftItem.name.localeCompare(rightItem.name);
+}
+
+export function sortItemsByStockAndYuka<T extends StockSortableItem>(items: T[]): T[] {
+  return [...items].sort(compareItemsByStockAndYuka);
+}
+
+export function mapItemsWithStockSummary(
+  items: Item[],
+  stockSummaryByProductId: Map<number, ProductStockSummary>,
+): ItemWithStockSummary[] {
+  const enrichedItems = items.map((item) => ({
+    ...item,
+    stockSummary: stockSummaryByProductId.get(item.id) ?? {
+      amount: 0,
+      amountOpened: 0,
+      nearestBestBeforeDate: null,
+    },
+    amountMissing: null,
+  }));
+
+  return sortItemsByStockAndYuka(enrichedItems);
 }

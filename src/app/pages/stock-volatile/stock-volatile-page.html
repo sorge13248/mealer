@@ -22,85 +22,8 @@
   } @else {
     <section class="items-grid" aria-label="Prodotti stock volatile">
       @for (item of items(); track item.id) {
-        <article class="item-card">
-          @if (hasProductPicture(item.picture_file_name)) {
-            @if (isProductPictureLoading(item.picture_file_name)) {
-              <div class="item-image item-image-loading" aria-live="polite" aria-busy="true">
-                <app-loading-spinner label="Caricamento immagine"></app-loading-spinner>
-              </div>
-            } @else if (getProductPictureUrl(item.picture_file_name); as pictureUrl) {
-              <img
-                class="item-image"
-                [src]="pictureUrl"
-                [alt]="'Immagine di ' + item.name"
-                loading="lazy"
-                decoding="async"
-                (pointerenter)="onImagePointerEnter($event, pictureUrl, item.name)"
-                (pointermove)="onImagePointerMove($event, pictureUrl, item.name)"
-                (pointerleave)="onImagePointerLeave($event)"
-              />
-            } @else {
-              <div class="item-image item-image-placeholder" aria-hidden="true">
-                @if (didProductPictureFail(item.picture_file_name)) {
-                  Immagine non disponibile
-                } @else {
-                  Nessuna immagine
-                }
-              </div>
-            }
-          } @else {
-            <div class="item-image item-image-placeholder" aria-hidden="true">Nessuna immagine</div>
-          }
-
-          <h2>{{ item.name }}</h2>
-
-          @if (getYukaScoreView(item); as yukaScore) {
-            <div
-              class="yuka-score"
-              [style.--yuka-color]="yukaScore.color"
-              [attr.aria-label]="'Punteggio Yuka ' + yukaScore.value + ' su 100'"
-            >
-              <span class="yuka-score-label">Punteggio Yuka</span>
-              <span class="yuka-score-value">{{ yukaScore.value }}/100</span>
-              <span class="yuka-score-track">
-                <span class="yuka-score-fill" [style.width.%]="yukaScore.value"></span>
-              </span>
-            </div>
-          }
-
-          @if (item.description) {
-            <p>{{ item.description }}</p>
-          }
-
-          <div class="stock-summary" aria-label="Dati stock prodotto">
-            @if (section() === 'missing') {
-              <span class="stock-pill stock-pill-warning">Mancano: {{ item.amountMissing }}</span>
-            } @else {
-              <span class="stock-pill">Pezzi: {{ item.stockSummary.amount }}</span>
-              <span class="stock-pill">Aperti: {{ item.stockSummary.amountOpened }}</span>
-              @if (formatBestBeforeDate(item.stockSummary.nearestBestBeforeDate); as formattedBestBeforeDate) {
-                <span class="stock-pill stock-pill-date">
-                  Scadenza: {{ formattedBestBeforeDate }}
-                  @if (getDaysUntilBestBeforeLabel(item.stockSummary.nearestBestBeforeDate); as daysUntilBestBeforeLabel) {
-                    ({{ daysUntilBestBeforeLabel }})
-                  }
-                </span>
-              }
-            }
-          </div>
-        </article>
+        <app-item-card [item]="item"></app-item-card>
       }
     </section>
-  }
-
-  @if (isPreviewVisible()) {
-    <div
-      class="image-preview-popup"
-      [style.left.px]="previewPosition().x"
-      [style.top.px]="previewPosition().y"
-      aria-hidden="true"
-    >
-      <img class="image-preview-popup-content" [src]="previewImageUrl()" [alt]="previewImageAlt()" />
-    </div>
   }
 </main>
