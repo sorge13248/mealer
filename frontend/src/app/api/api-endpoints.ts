@@ -1,12 +1,10 @@
-import { Injectable, inject } from '@angular/core';
-import { RuntimeSecretsService } from '../services/runtime-secrets.service';
+import { Injectable } from '@angular/core';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ApiEndpointsService {
-  private readonly runtimeSecrets = inject(RuntimeSecretsService);
-
   products(): string {
-    return `${this.apiPrefix}/objects/products`;
+    return `${this.apiPrefix}/products`;
   }
 
   stock(): string {
@@ -22,14 +20,15 @@ export class ApiEndpointsService {
   }
 
   productPictureByBase64(encodedFileName: string): string {
-    return `${this.apiPrefix}/files/productpictures/${encodedFileName}`;
+    return `${this.apiPrefix}/files/productpictures/${encodeURIComponent(encodedFileName)}`;
   }
 
   productPage(productId: number): string {
-    return `${this.runtimeSecrets.apiUrl}/product/${productId}`;
+    return `${this.apiPrefix}/product/${productId}`;
   }
 
   private get apiPrefix(): string {
-    return `${this.runtimeSecrets.apiUrl}/api`;
+    const normalizedBackendBaseUrl = environment.backendApiBaseUrl.replace(/\/+$/, '');
+    return `${normalizedBackendBaseUrl}/grocy`;
   }
 }

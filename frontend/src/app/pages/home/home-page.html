@@ -65,23 +65,5 @@
         </button>
       }
     </section>
-
-    <footer class="service-link-area" aria-label="Azioni di servizio">
-      <button
-        type="button"
-        class="service-link-button"
-        [disabled]="isResettingSecrets()"
-        (click)="resetSecretsFromHome()"
-      >
-        @if (isResettingSecrets()) {
-          Reimpostazione in corso...
-        } @else {
-          Reimposta configurazione secret
-        }
-      </button>
-      @if (resetErrorMessage(); as resetError) {
-        <p class="service-link-error" role="alert">{{ resetError }}</p>
-      }
-    </footer>
   }
 </main>

@@ -2,21 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
-import { SecureSecretsStorageService } from './services/secure-secrets-storage.service';
-
-class SecureSecretsStorageServiceMock {
-  loadSecrets(): Promise<null> {
-    return Promise.resolve(null);
-  }
-
-  saveSecrets(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  clearSecrets(): Promise<void> {
-    return Promise.resolve();
-  }
-}
 
 describe('App', () => {
   beforeEach(async () => {
@@ -25,10 +10,6 @@ describe('App', () => {
       providers: [
         provideHttpClient(),
         provideRouter([]),
-        {
-          provide: SecureSecretsStorageService,
-          useClass: SecureSecretsStorageServiceMock
-        }
       ]
     }).compileComponents();
   });
@@ -39,13 +20,13 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render setup form on first access', async () => {
+  it('should render the router outlet shell', async () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('form')).toBeTruthy();
+    expect(compiled.querySelector('router-outlet')).toBeTruthy();
   });
 });

@@ -1,0 +1,35 @@
+services:
+  backend:
+    container_name: mealer-backend
+    image: ghcr.io/sorge13248/mealer-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: ${DB_PATH:-/app/data/mealer.sqlite}
+      DB_AUTO_LOAD_ENTITIES: ${DB_AUTO_LOAD_ENTITIES:-true}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
+      DB_LOGGING: ${DB_LOGGING:-false}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost:4200"]}
+      GROCY_BASE_URL: ${GROCY_BASE_URL}
+      GROCY_API_KEY: ${GROCY_API_KEY}
+      GROCY_TIMEOUT_MS: ${GROCY_TIMEOUT_MS:-10000}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - mealer-backend-data:/app/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e 'const fs=require("node:fs");const path=require("node:path");const http=require("node:http");const dbPath=path.resolve(process.env.DB_PATH||"/app/data/mealer.sqlite");const dbOk=fs.existsSync(dbPath);const req=http.get({host:"127.0.0.1",port:Number(process.env.PORT||3000),path:"/health",timeout:3000},(res)=>{const httpOk=res.statusCode===200;res.resume();process.exit(httpOk&&dbOk?0:1);});req.on("error",()=>process.exit(1));req.on("timeout",()=>{req.destroy();process.exit(1);});'
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mealer-backend-data:

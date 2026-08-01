@@ -3,13 +3,12 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
-import { grocyApiKeyInterceptor } from './interceptors/grocy-api-key.interceptor';
 import { httpCacheInterceptor } from './interceptors/http-cache.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideHttpClient(withXhr(), withInterceptors([httpCacheInterceptor, grocyApiKeyInterceptor])),
+    provideHttpClient(withXhr(), withInterceptors([httpCacheInterceptor])),
     provideRouter(routes),
   ],
 };

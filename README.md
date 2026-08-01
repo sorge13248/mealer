@@ -1,107 +1,51 @@
-# Mealer
+# Mealer Monorepo
 
-### Smart pantry browsing for Grocy, with category navigation and stock-priority views
+Repository mono-repo con due applicazioni separate:
 
-Mealer is an Angular web app that connects to a Grocy instance and helps you browse products by macro category, check expiring/missing items, and inspect stock data with a fast visual workflow.
+- frontend/: app Angular
+- backend/: API NestJS (proxy Grocy + SQLite)
 
-## Features
+## Requisiti
 
-- Guided onboarding at first access with API URL and API key validation via `GET /api/system/info`
-- Secure local secret storage in the browser (encrypted at rest via Web Crypto + IndexedDB)
-- Home page grouped by `food_macrocategory`, including a virtual "Senza macrocategoria" section
-- Dedicated macro-category page with product cards, score badges, stock details, and image loading states
-- Dedicated volatile stock page for due, expired, and missing products
-- API key interceptor and optional HTTP response caching
-- Multi-architecture production container image build (`linux/amd64`, `linux/arm64`) via GitHub Actions
+- Node.js 22+
+- npm 11+
 
-## Local development
-
-### 1. Prerequisites
-
-- Node.js `24.15.0` or newer supported by the current Angular CLI
-- npm (bundled with Node.js)
-
-If you use nvm:
+## Installazione dipendenze (workspace)
 
 ```bash
-source ~/.nvm/nvm.sh
-nvm install 24.15.0
-nvm use 24.15.0
+npm install
 ```
 
-### 2. Install dependencies
+## Avvio sviluppo
+
+Backend:
 
 ```bash
-npm ci
+npm run start:backend
 ```
 
-### 3. Run the app
+Frontend:
 
 ```bash
-npm start
+npm run start:frontend
 ```
 
-Open `http://localhost:4200`.
-
-At first launch, the onboarding screen asks for:
-
-- Grocy base URL
-- Grocy API key
-
-The values are validated before save, then stored locally in encrypted form.
-
-### 4. Build and test
+## Build e test
 
 ```bash
 npm run build
-npm test
+npm run test
 ```
 
-## Production deployment
+## Docker produzione
 
-### Option A: Docker (recommended)
+Vedi docker-compose.yml alla root e backend/Dockerfile.prod.
 
-Build local image:
+## GitHub Actions (monorepo)
 
-```bash
-docker build -t mealer:prod .
-```
+Le workflow sono alla root in `.github/workflows`:
 
-Run container:
+- `docker-frontend-multiarch.yml`: build/publish immagine frontend (`frontend/**`)
+- `docker-backend-multiarch.yml`: build/publish immagine backend (`backend/**`)
 
-```bash
-docker run --rm -p 8080:8080 mealer:prod
-```
-
-Notes:
-
-- Runtime image uses `nginx:alpine`
-- Container runs as non-root user
-- App is served on port `8080`
-
-### Option B: GitHub Actions + GHCR
-
-Workflow file: `.github/workflows/docker-multiarch.yml`
-
-On push to `main` (and on schedule/manual trigger), CI builds multi-arch images and publishes to GHCR:
-
-- `ghcr.io/sorge13248/mealer:latest`
-- additional tags based on branch/tag/sha
-
-Pull example:
-
-```bash
-docker pull ghcr.io/sorge13248/mealer:latest
-```
-
-If the package is private, authenticate first:
-
-```bash
-docker login ghcr.io
-```
-
-## License
-
-This project is licensed under the GNU General Public License v3.0.
-
-See [LICENSE](LICENSE).
+Entrambe pubblicano su GHCR immagini multi-arch (`linux/amd64`, `linux/arm64`) e usano trigger `paths` per eseguire solo quando cambia la rispettiva app.
