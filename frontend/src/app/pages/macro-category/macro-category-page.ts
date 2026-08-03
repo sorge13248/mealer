@@ -1,9 +1,10 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
+import { BackButtonComponent } from '../../components/back-button/back-button';
 import { ItemCardComponent } from '../../components/item-card/item-card';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
@@ -26,7 +27,7 @@ type MacroCategoryViewItem = ItemWithStockSummary;
 @Component({
   selector: 'app-macro-category-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingSpinnerComponent, ItemCardComponent, RouterLink],
+  imports: [BackButtonComponent, LoadingSpinnerComponent, ItemCardComponent],
   templateUrl: './macro-category-page.html',
   styleUrl: './macro-category-page.scss'
 })

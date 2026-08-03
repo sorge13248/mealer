@@ -1,8 +1,9 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { LucideCheck, LucideCircle, LucideDynamicIcon, LucideMinus, LucideOctagonAlert } from '@lucide/angular';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
+import { BackButtonComponent } from '../../components/back-button/back-button';
 import { ItemCardComponent, ItemConsumedEvent } from '../../components/item-card/item-card';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
@@ -91,7 +92,7 @@ interface PersistedMealSelection {
 @Component({
   selector: 'app-meal-planner-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingSpinnerComponent, ItemCardComponent, RouterLink],
+  imports: [BackButtonComponent, LoadingSpinnerComponent, LucideDynamicIcon, ItemCardComponent],
   templateUrl: './meal-planner-page.html',
   styleUrl: './meal-planner-page.scss',
   host: {
@@ -118,6 +119,11 @@ export class MealPlannerPage {
   protected readonly hasPersistedMealSelection = signal(false);
   protected readonly knownCategoryOptions = KNOWN_MEAL_PLANNER_CATEGORY_OPTIONS;
   protected readonly stockSummaryOverrides = signal<ReadonlyMap<number, ProductStockSummary>>(new Map());
+  protected readonly saveSuccessIcon = LucideCheck;
+  protected readonly ruleOkIcon = LucideCheck;
+  protected readonly ruleRequiredIcon = LucideOctagonAlert;
+  protected readonly ruleRecommendedIcon = LucideMinus;
+  protected readonly ruleOptionalIcon = LucideCircle;
 
   protected readonly canSaveCategoryMapping = computed(() =>
     this.apiCategories().every((apiCategory) => {

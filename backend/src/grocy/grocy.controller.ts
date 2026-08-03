@@ -45,7 +45,8 @@ export class GrocyController {
     @Param('encodedFileName') encodedFileName: string,
     @Res() response: Response,
   ): Promise<void> {
-    const picture = await this.grocyService.getProductPictureByEncodedName(encodedFileName);
+    const picture =
+      await this.grocyService.getProductPictureByEncodedName(encodedFileName);
 
     if (picture.contentType) {
       response.setHeader('Content-Type', picture.contentType);
@@ -64,9 +65,19 @@ export class GrocyController {
 
   @Get('product/:productId')
   @Redirect()
-  redirectToProductPage(@Param('productId', ParseIntPipe) productId: number): { url: string } {
+  redirectToProductPage(@Param('productId', ParseIntPipe) productId: number): {
+    url: string;
+  } {
     return {
       url: this.grocyService.getProductPageUrl(productId),
+    };
+  }
+
+  @Get('products-page')
+  @Redirect()
+  redirectToProductsPage(): { url: string } {
+    return {
+      url: this.grocyService.getProductsPageUrl(),
     };
   }
 }

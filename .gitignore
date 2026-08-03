@@ -19,6 +19,9 @@ frontend/dist/
 *.sqlite-shm
 *.sqlite-wal
 
+# OCR language data
+*.traineddata
+
 # Editor/system
 .DS_Store
 Thumbs.db

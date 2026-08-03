@@ -27,7 +27,6 @@ $accent-base: #337ab7;
   margin-bottom: 1rem;
 }
 
-.back-button,
 .retry-button {
   text-decoration: none;
   border: 1px solid #{rgba($accent-base, 0.92)};
@@ -42,7 +41,7 @@ $accent-base: #337ab7;
     0 8px 26px rgba(8, 21, 38, 0.42);
 }
 
-.back-button {
+app-back-button {
   margin-bottom: 1rem;
 }
 
@@ -81,7 +80,6 @@ h1 {
   gap: 0.85rem;
 }
 
-.back-button:focus-visible,
 .retry-button:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;

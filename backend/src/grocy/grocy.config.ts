@@ -11,7 +11,9 @@ const DEFAULT_TIMEOUT_MS = 10000;
 function getRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
-    throw new InternalServerErrorException(`Missing required environment variable: ${name}`);
+    throw new InternalServerErrorException(
+      `Missing required environment variable: ${name}`,
+    );
   }
 
   return value;
@@ -24,7 +26,9 @@ export function readGrocyConfigFromEnv(): GrocyConfig {
   const timeoutMs = timeoutValue ? Number(timeoutValue) : DEFAULT_TIMEOUT_MS;
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new InternalServerErrorException('GROCY_TIMEOUT_MS must be a positive number');
+    throw new InternalServerErrorException(
+      'GROCY_TIMEOUT_MS must be a positive number',
+    );
   }
 
   return {

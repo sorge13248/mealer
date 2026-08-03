@@ -10,9 +10,19 @@ export const routes: Routes = [
 		loadComponent: () => import('./pages/dispensa/dispensa-page').then((module) => module.DispensaPage)
 	},
 	{
+		path: 'macrocategoria',
+		redirectTo: '/dispensa',
+		pathMatch: 'full'
+	},
+	{
 		path: 'macrocategoria/:macroCategory',
 		loadComponent: () =>
 			import('./pages/macro-category/macro-category-page').then((module) => module.MacroCategoryPage)
+	},
+	{
+		path: 'stock-volatile',
+		redirectTo: '/dispensa',
+		pathMatch: 'full'
 	},
 	{
 		path: 'stock-volatile/:section',
@@ -26,6 +36,11 @@ export const routes: Routes = [
 	},
 	{
 		path: 'spesa',
+		loadComponent: () =>
+			import('./pages/spesa-dashboard/spesa-dashboard-page').then((module) => module.SpesaDashboardPage)
+	},
+	{
+		path: 'spesa/nuova',
 		loadComponent: () => import('./pages/spesa/spesa-page').then((module) => module.SpesaPage)
 	}
 ];

@@ -1,5 +1,10 @@
 import { HttpService } from '@nestjs/axios';
-import { BadRequestException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { AxiosError } from 'axios';
 import { createGrocyApiKeyInterceptor } from './interceptors/grocy-api-key.interceptor';
 import { GrocyConfig, readGrocyConfigFromEnv } from './grocy.config';
@@ -35,7 +40,9 @@ export class GrocyService {
     return this.post(`api/stock/products/${productId}/consume`, payload);
   }
 
-  async getProductPictureByEncodedName(encodedFileName: string): Promise<GrocyPictureResponse> {
+  async getProductPictureByEncodedName(
+    encodedFileName: string,
+  ): Promise<GrocyPictureResponse> {
     const normalizedToken = this.normalizeBase64Token(encodedFileName);
 
     try {
@@ -52,8 +59,12 @@ export class GrocyService {
       return {
         data: Buffer.from(response.data),
         contentType: this.headerValueToString(response.headers['content-type']),
-        contentLength: this.headerValueToString(response.headers['content-length']),
-        cacheControl: this.headerValueToString(response.headers['cache-control']),
+        contentLength: this.headerValueToString(
+          response.headers['content-length'],
+        ),
+        cacheControl: this.headerValueToString(
+          response.headers['cache-control'],
+        ),
       };
     } catch (error) {
       this.throwAsHttpException(error);
@@ -63,6 +74,11 @@ export class GrocyService {
   getProductPageUrl(productId: number): string {
     const config = this.readConfig();
     return `${config.baseUrl}/product/${productId}`;
+  }
+
+  getProductsPageUrl(): string {
+    const config = this.readConfig();
+    return `${config.baseUrl}/products`;
   }
 
   private async get(path: string): Promise<unknown> {
@@ -113,7 +129,9 @@ export class GrocyService {
     }
 
     const missingPadding = normalized.length % 4;
-    return missingPadding === 0 ? normalized : `${normalized}${'='.repeat(4 - missingPadding)}`;
+    return missingPadding === 0
+      ? normalized
+      : `${normalized}${'='.repeat(4 - missingPadding)}`;
   }
 
   private throwAsHttpException(error: unknown): never {

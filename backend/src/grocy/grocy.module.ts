@@ -7,5 +7,6 @@ import { GrocyService } from './grocy.service';
   imports: [HttpModule],
   controllers: [GrocyController],
   providers: [GrocyService],
+  exports: [GrocyService],
 })
 export class GrocyModule {}

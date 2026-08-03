@@ -3,8 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { GrocyModule } from './grocy/grocy.module';
+import { SpesaModule } from './spesa/spesa.module';
 
-function envToBoolean(value: string | undefined, defaultValue: boolean): boolean {
+function envToBoolean(
+  value: string | undefined,
+  defaultValue: boolean,
+): boolean {
   if (value === undefined) {
     return defaultValue;
   }
@@ -24,6 +28,7 @@ function envToBoolean(value: string | undefined, defaultValue: boolean): boolean
       }),
     }),
     GrocyModule,
+    SpesaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

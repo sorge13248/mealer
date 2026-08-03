@@ -1,8 +1,6 @@
 <main class="page">
   <header class="page-header">
-    <a routerLink="/" class="back-button" aria-label="Torna alla home">
-      ← Indietro
-    </a>
+    <app-back-button to=".." label="Indietro" ariaLabel="Torna indietro"></app-back-button>
     <p class="lead">Dieta Mediterranea</p>
     <h1>Pianificatore Pasto</h1>
   </header>
@@ -97,7 +95,7 @@
               [disabled]="selectedItems().length === 0"
             >
               @if (isMealSelectionSaved()) {
-                <span class="save-button-icon" aria-hidden="true">✓</span>
+                <svg [lucideIcon]="saveSuccessIcon" class="save-button-icon" aria-hidden="true"></svg>
               }
               {{ isMealSelectionSaved() ? 'Salvato' : 'Salva selezione' }}
             </button>
@@ -122,7 +120,17 @@
             [class.rule-item-recommended]="rule.priority === 'recommended' && !rule.satisfied"
             [class.rule-item-optional]="rule.priority === 'optional' && !rule.satisfied"
           >
-            <span class="rule-icon" aria-hidden="true">{{ rule.satisfied ? '✓' : rule.priority === 'required' ? '!' : rule.priority === 'recommended' ? '·' : '○' }}</span>
+            <span class="rule-icon" aria-hidden="true">
+              @if (rule.satisfied) {
+                <svg [lucideIcon]="ruleOkIcon" class="rule-icon-svg"></svg>
+              } @else if (rule.priority === 'required') {
+                <svg [lucideIcon]="ruleRequiredIcon" class="rule-icon-svg"></svg>
+              } @else if (rule.priority === 'recommended') {
+                <svg [lucideIcon]="ruleRecommendedIcon" class="rule-icon-svg"></svg>
+              } @else {
+                <svg [lucideIcon]="ruleOptionalIcon" class="rule-icon-svg"></svg>
+              }
+            </span>
             <span class="rule-text">
               <span class="rule-label">{{ rule.label }}</span>
               @if (!rule.satisfied) {

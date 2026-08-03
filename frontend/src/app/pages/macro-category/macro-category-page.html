@@ -1,6 +1,6 @@
 <main class="page">
   <header class="page-header">
-    <a routerLink="/" class="back-button">&lt; Torna alle categorie</a>
+    <app-back-button to=".." label="Torna alle categorie" ariaLabel="Torna alle categorie"></app-back-button>
 
     <h1>{{ parsedCategory().title }}</h1>
     @if (parsedCategory().subtitle) {

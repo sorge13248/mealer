@@ -42,18 +42,8 @@ h1 {
   max-width: 68ch;
 }
 
-.status-panel p {
-  margin: 0;
-}
-
-.status-panel-error {
-  border-color: #{rgba($accent-base, 0.75)};
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.24), var(--glass-fill-strong) 48%, rgba(9, 22, 40, 0.4) 100%);
-}
-
 .retry-button {
-  margin-top: 0.9rem;
+  text-decoration: none;
   border: 1px solid #{rgba($accent-base, 0.92)};
   background: #{rgba($accent-base, 0.24)};
   color: #eef8ff;
@@ -66,6 +56,10 @@ h1 {
     0 8px 26px rgba(8, 21, 38, 0.42);
 }
 
+app-back-button {
+  margin-bottom: 1rem;
+}
+
 .retry-button:hover {
   background: #{rgba($accent-base, 0.36)};
 }
@@ -74,6 +68,20 @@ h1 {
 .category-card:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.status-panel p {
+  margin: 0;
+}
+
+.status-panel-error {
+  border-color: #{rgba($accent-base, 0.75)};
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), var(--glass-fill-strong) 48%, rgba(9, 22, 40, 0.4) 100%);
+}
+
+.retry-button {
+  margin-top: 0.9rem;
 }
 
 .category-grid {

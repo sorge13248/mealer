@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
+import { BackButtonComponent } from '../../components/back-button/back-button';
 import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import {
@@ -40,7 +41,7 @@ interface MacroCategoryCard {
 @Component({
     selector: 'app-dispensa-page',
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [LoadingSpinnerComponent, RouterLink],
+    imports: [BackButtonComponent, LoadingSpinnerComponent, RouterLink],
     templateUrl: './dispensa-page.html',
     styleUrl: './dispensa-page.scss'
 })

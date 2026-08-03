@@ -75,8 +75,40 @@ h1 {
 }
 
 .section-icon {
-  font-size: 2rem;
-  line-height: 1;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.36rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+  color: #d8ebff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 8px 18px rgba(1, 7, 16, 0.38);
+  transition:
+    color 170ms ease,
+    background 170ms ease,
+    border-color 170ms ease,
+    transform 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.section-card-dispensa .section-icon {
+  color: #79bfff;
+  border-color: rgba(121, 191, 255, 0.5);
+  background: rgba(51, 122, 183, 0.2);
+}
+
+.section-card-planner .section-icon {
+  color: #95e3b9;
+  border-color: rgba(149, 227, 185, 0.5);
+  background: rgba(76, 175, 131, 0.2);
+}
+
+.section-card-spesa .section-icon {
+  color: #f3d285;
+  border-color: rgba(243, 210, 133, 0.5);
+  background: rgba(215, 179, 92, 0.2);
 }
 
 .section-title {
@@ -102,6 +134,13 @@ h1 {
     0 20px 42px rgba(2, 10, 21, 0.54);
 }
 
+.section-card-dispensa:hover .section-icon {
+  color: #cde8ff;
+  border-color: rgba(159, 211, 255, 0.75);
+  background: rgba(61, 141, 211, 0.3);
+  transform: translateY(-1px);
+}
+
 .section-card-planner:hover {
   transform: translateY(-3px) scale(1.01);
   border-color: rgba(76, 175, 131, 0.72);
@@ -112,6 +151,13 @@ h1 {
     0 20px 42px rgba(2, 10, 21, 0.54);
 }
 
+.section-card-planner:hover .section-icon {
+  color: #daf7e8;
+  border-color: rgba(183, 238, 209, 0.78);
+  background: rgba(89, 194, 145, 0.3);
+  transform: translateY(-1px);
+}
+
 .section-card-spesa:hover {
   transform: translateY(-3px) scale(1.01);
   border-color: rgba(215, 179, 92, 0.72);
@@ -120,4 +166,11 @@ h1 {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     0 20px 42px rgba(2, 10, 21, 0.54);
+}
+
+.section-card-spesa:hover .section-icon {
+  color: #fff0c3;
+  border-color: rgba(248, 221, 147, 0.78);
+  background: rgba(224, 189, 101, 0.3);
+  transform: translateY(-1px);
 }

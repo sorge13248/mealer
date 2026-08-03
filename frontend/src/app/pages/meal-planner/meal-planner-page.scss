@@ -61,28 +61,8 @@ h1 {
   color: var(--ink-1);
 }
 
-.back-button {
-  text-decoration: none;
-  border: 0;
-  background: transparent;
-  color: var(--ink-2);
-  font-size: 0.82rem;
-  padding: 0;
-  cursor: pointer;
-  margin-bottom: 0.5rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  letter-spacing: 0.02em;
-
-  &:hover {
-    color: var(--ink-0);
-  }
-
-  &:focus-visible {
-    @include focus-ring(3px);
-    border-radius: 4px;
-  }
+app-back-button {
+  margin-bottom: 1rem;
 }
 
 // ─── Status / loading panel ───────────────────────────────────────────────
@@ -121,30 +101,10 @@ h1 {
 }
 
 .mapping-intro {
-  margin: 0 0 0.95rem;
+  margin: 0 0 1rem;
   color: var(--ink-1);
-  font-size: 0.9rem;
-  max-width: 65ch;
-}
-
-.mapping-form {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.mapping-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.58rem;
-}
-
-.mapping-row {
-  display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr);
-  gap: 0.75rem;
-  align-items: center;
+  max-width: 72ch;
+  line-height: 1.45;
 }
 
 .mapping-label {
@@ -411,16 +371,23 @@ h1 {
 
 .rule-icon {
   flex-shrink: 0;
-  font-weight: 700;
-  font-size: 0.88rem;
-  line-height: 1.2;
+  line-height: 1;
   width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
 
   .rule-item-ok & { color: rgba($green, 0.95); }
   .rule-item-required & { color: rgba($red, 0.9); }
   .rule-item-recommended & { color: rgba($amber, 0.9); }
   .rule-item-optional & { color: var(--ink-2); }
+}
+
+.rule-icon-svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .rule-text {

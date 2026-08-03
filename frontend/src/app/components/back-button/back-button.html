@@ -1,0 +1,4 @@
+<a [routerLink]="to()" class="back-button" [attr.aria-label]="ariaLabel() ?? label()">
+  <svg [lucideIcon]="icon" class="back-button-icon" aria-hidden="true"></svg>
+  <span>{{ label() }}</span>
+</a>

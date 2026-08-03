@@ -29,6 +29,36 @@ export class ApiEndpointsService {
     return `${this.apiPrefix}/product/${productId}`;
   }
 
+  grocyProductsPage(): string {
+    return `${this.apiPrefix}/products-page`;
+  }
+
+  spesaReceiptParse(): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipt/parse`;
+  }
+
+  spesaMatchCandidates(): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/match/candidates`;
+  }
+
+  spesaMappings(): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/mappings`;
+  }
+
+  spesaReceiptSave(): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipt/save`;
+  }
+
+  spesaInsights(days: number, productIds: number[]): string {
+    const params = new URLSearchParams();
+    params.set('days', String(days));
+    if (productIds.length > 0) {
+      params.set('productIds', productIds.join(','));
+    }
+
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/insights?${params.toString()}`;
+  }
+
   private get apiPrefix(): string {
     return `${this.runtimeConfig.backendApiBaseUrl}/grocy`;
   }

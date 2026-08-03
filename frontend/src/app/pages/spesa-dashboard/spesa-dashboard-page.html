@@ -1,0 +1,252 @@
+<main class="page">
+  <header class="page-header">
+    <app-back-button to=".." label="Indietro" ariaLabel="Torna indietro"></app-back-button>
+    <p class="lead">Analisi spesa e trend prezzi</p>
+    <div class="header-top-row">
+      <h1>Spesa</h1>
+      <a routerLink="/spesa/nuova" class="new-receipt-button">Nuova spesa</a>
+    </div>
+    <p class="subtitle">
+      Monitora andamento mensile, prodotti piu impattanti e variazioni prezzo dei prodotti selezionati.
+    </p>
+  </header>
+
+  <section class="controls-panel" aria-label="Filtri dashboard spesa">
+    <div class="controls-left">
+      <label class="control-label" for="period-days">Periodo analisi</label>
+      <select id="period-days" class="control-select" [value]="selectedPeriodDays()" (change)="onPeriodChange($event)">
+        @for (option of periodOptions; track option) {
+          <option [value]="option">Ultimi {{ option }} giorni</option>
+        }
+      </select>
+    </div>
+
+    <div class="controls-right">
+      <button type="button" class="ghost-action" (click)="openProductFilterModal()" [disabled]="isLoadingProducts()">
+        Filtra prodotti
+      </button>
+      <button
+        type="button"
+        class="ghost-action"
+        (click)="clearProductFilter()"
+        [disabled]="selectedProductIds().size === 0"
+      >
+        Rimuovi filtro
+      </button>
+    </div>
+
+    @if (selectedProducts().length > 0) {
+      <div class="selected-products-strip" aria-label="Prodotti filtrati">
+        @for (product of selectedProducts(); track product.id) {
+          <a
+            class="selected-product-chip"
+            [href]="getGrocyProductUrl(product.id)"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ product.name }}
+          </a>
+        }
+      </div>
+    }
+
+    @if (productsErrorMessage()) {
+      <p class="status-message status-message-warning">{{ productsErrorMessage() }}</p>
+    }
+  </section>
+
+  @if (isLoadingInsights()) {
+    <section class="status-panel" aria-live="polite" aria-busy="true">
+      <p class="status-message">Caricamento analisi spesa...</p>
+    </section>
+  } @else if (insightsErrorMessage()) {
+    <section class="status-panel" aria-live="assertive">
+      <p class="status-message status-message-error">{{ insightsErrorMessage() }}</p>
+    </section>
+  } @else if (insights(); as data) {
+    <section class="kpi-grid" aria-label="Indicatori principali">
+      <article class="kpi-card">
+        <h2>Totale speso</h2>
+        <p>{{ formatMoney(data.overview.totalSpent) }}</p>
+      </article>
+      <article class="kpi-card">
+        <h2>Scontrini analizzati</h2>
+        <p>{{ data.overview.receiptsCount }}</p>
+      </article>
+      <article class="kpi-card">
+        <h2>Media per scontrino</h2>
+        <p>{{ formatMoney(data.overview.averageReceiptTotal) }}</p>
+      </article>
+      <article class="kpi-card">
+        <h2>Periodo</h2>
+        <p>{{ data.periodDays }} giorni</p>
+      </article>
+    </section>
+
+    <section class="panel" aria-label="Andamento costo spesa mensile">
+      <header class="panel-header">
+        <h2>Andamento mensile costo spesa</h2>
+        <p>Totale speso per mese nel periodo selezionato.</p>
+      </header>
+
+      @if (data.monthlyTotals.length === 0) {
+        <p class="status-message">Nessun dato disponibile nel periodo selezionato.</p>
+      } @else {
+        <div class="line-chart-wrap" role="img" aria-label="Grafico linea andamento costo spesa">
+          <svg class="line-chart" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+            <polyline [attr.points]="spendChartPoints()" class="line-chart-path" />
+          </svg>
+        </div>
+
+        <ul class="month-list" role="list">
+          @for (row of data.monthlyTotals; track row.month) {
+            <li class="month-list-row">
+              <span>{{ formatMonth(row.month) }}</span>
+              <strong>{{ formatMoney(row.totalSpent) }}</strong>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel" aria-label="Prodotti con maggiore spesa">
+      <header class="panel-header">
+        <h2>Prodotti con maggiore impatto</h2>
+        <p>Classifica per spesa totale nel periodo selezionato.</p>
+      </header>
+
+      @if (data.topProductsBySpend.length === 0) {
+        <p class="status-message">Nessun prodotto disponibile per questo intervallo.</p>
+      } @else {
+        <ul class="top-products-list" role="list">
+          @for (product of data.topProductsBySpend; track product.grocyProductId) {
+            <li class="top-products-row">
+              <div class="top-products-meta">
+                <h3>
+                  <a
+                    class="product-link"
+                    [href]="getGrocyProductUrl(product.grocyProductId)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ product.grocyProductName }}
+                  </a>
+                </h3>
+                <p>
+                  Totale {{ formatMoney(product.totalSpent) }} - Min {{ formatMoney(product.minUnitPrice) }} -
+                  Max {{ formatMoney(product.maxUnitPrice) }}
+                </p>
+                <p>
+                  Media {{ formatMoney(product.averageUnitPrice) }} - Mediana {{ formatMoney(product.medianUnitPrice) }} -
+                  Ultimo prezzo {{ formatMoney(product.lastUnitPrice) }}
+                </p>
+              </div>
+              <div class="top-products-bar" aria-hidden="true">
+                <span class="top-products-bar-fill" [style.width]="getTopProductWidth(product.totalSpent)"></span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel" aria-label="Andamento prezzi prodotti filtrati">
+      <header class="panel-header">
+        <h2>Andamento prezzi prodotti selezionati</h2>
+        <p>
+          @if (selectedProductIds().size === 0) {
+            Seleziona uno o piu prodotti per vedere i trend dettagliati.
+          } @else {
+            Trend unitario nel tempo per i prodotti filtrati.
+          }
+        </p>
+      </header>
+
+      @if (selectedProductIds().size === 0) {
+        <p class="status-message">Nessun filtro prodotto attivo.</p>
+      } @else if (data.selectedProductsTrend.length === 0) {
+        <p class="status-message">Nessun dato storico trovato per i prodotti selezionati nel periodo scelto.</p>
+      } @else {
+        <div class="trend-grid">
+          @for (trend of data.selectedProductsTrend; track trend.grocyProductId) {
+            <article class="trend-card">
+              <header>
+                <h3>
+                  <a
+                    class="product-link"
+                    [href]="getGrocyProductUrl(trend.grocyProductId)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ trend.grocyProductName }}
+                  </a>
+                </h3>
+                <p>
+                  Ultimo prezzo: {{ formatMoney(getLastTrendPrice(trend.points)) }} - Rilevazioni: {{ trend.points.length }}
+                </p>
+              </header>
+
+              <div class="line-chart-wrap trend-line-chart" role="img" [attr.aria-label]="'Trend prezzo di ' + trend.grocyProductName">
+                <svg class="line-chart" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+                  <polyline [attr.points]="getTrendSparklinePoints(trend.points)" class="line-chart-path" />
+                </svg>
+              </div>
+
+              <ul class="trend-points-list" role="list">
+                @for (point of trend.points; track point.receiptId + '-' + point.observedAt) {
+                  <li>
+                    <span>{{ formatDate(point.observedAt) }}</span>
+                    <strong>{{ formatMoney(point.unitPrice) }}</strong>
+                  </li>
+                }
+              </ul>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  @if (isProductFilterModalOpen()) {
+    <div class="modal-backdrop" (click)="closeProductFilterModal()" aria-hidden="true"></div>
+    <section class="product-filter-modal" role="dialog" aria-modal="true" aria-label="Filtro manuale prodotti">
+      <header class="product-filter-header">
+        <h2>Seleziona prodotti da monitorare</h2>
+        <p>Usa ricerca e card per scegliere i prodotti da includere nel grafico trend prezzi.</p>
+      </header>
+
+      <input
+        type="search"
+        class="manual-search-input"
+        [value]="modalSearchQuery()"
+        (input)="onModalSearchQueryChange($any($event.target).value)"
+        placeholder="Cerca prodotto"
+        aria-label="Cerca prodotto"
+      />
+
+      <ul class="modal-items-grid" role="list" aria-label="Risultati prodotti">
+        @for (product of filteredModalProducts(); track product.id) {
+          <li
+            class="modal-item-entry modal-item-clickable"
+            [class.modal-item-entry-selected]="isModalProductSelected(product.id)"
+            [attr.aria-pressed]="isModalProductSelected(product.id)"
+            role="button"
+            tabindex="0"
+            (click)="onModalProductCardClick(product.id, $event)"
+            (keydown)="onModalProductCardKeydown(product.id, $event)"
+          >
+            <app-item-card [item]="product"></app-item-card>
+          </li>
+        }
+      </ul>
+
+      <footer class="product-filter-footer">
+        <p>{{ modalSelectedProductIds().size }} selezionati</p>
+        <div class="product-filter-actions">
+          <button type="button" class="modal-cancel-button" (click)="closeProductFilterModal()">Annulla</button>
+          <button type="button" class="modal-confirm-button" (click)="applyProductFilter()">Applica filtro</button>
+        </div>
+      </footer>
+    </section>
+  }
+</main>

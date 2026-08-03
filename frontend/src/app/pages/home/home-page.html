@@ -6,19 +6,19 @@
 
   <nav class="section-grid" aria-label="Sezioni principali">
     <a routerLink="/dispensa" class="section-card section-card-dispensa" aria-label="Vai alla dispensa">
-      <span class="section-icon" aria-hidden="true">🥫</span>
+      <svg [lucideIcon]="pantryIcon" class="section-icon" aria-hidden="true"></svg>
       <span class="section-title">Dispensa</span>
       <span class="section-desc">Esplora il tuo stock alimentare per categoria</span>
     </a>
 
     <a routerLink="/pianificatore-pasto" class="section-card section-card-planner" aria-label="Vai al pianificatore pasto">
-      <span class="section-icon" aria-hidden="true">🥗</span>
+      <svg [lucideIcon]="plannerIcon" class="section-icon" aria-hidden="true"></svg>
       <span class="section-title">Meal Planner</span>
       <span class="section-desc">Componi un pasto equilibrato seguendo la dieta mediterranea</span>
     </a>
 
     <a routerLink="/spesa" class="section-card section-card-spesa" aria-label="Vai alla spesa">
-      <span class="section-icon" aria-hidden="true">🛒</span>
+      <svg [lucideIcon]="shoppingIcon" class="section-icon" aria-hidden="true"></svg>
       <span class="section-title">Spesa</span>
       <span class="section-desc">Gestisci la tua lista della spesa</span>
     </a>

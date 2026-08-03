@@ -1,0 +1,34 @@
+:host {
+  display: inline-flex;
+}
+
+.back-button {
+  text-decoration: none;
+  border: 1px solid rgba(51, 122, 183, 0.92);
+  background: rgba(51, 122, 183, 0.24);
+  color: #eef8ff;
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem;
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 26px rgba(8, 21, 38, 0.42);
+}
+
+.back-button:hover {
+  background: rgba(51, 122, 183, 0.36);
+}
+
+.back-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.back-button-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
