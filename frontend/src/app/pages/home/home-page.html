@@ -4,66 +4,23 @@
     <h1>Mealer</h1>
   </header>
 
-  @if (isLoading()) {
-    <section class="status-panel" aria-live="polite" aria-busy="true">
-      <app-loading-spinner label="Caricamento categorie"></app-loading-spinner>
-    </section>
-  } @else if (errorMessage()) {
-    <section class="status-panel status-panel-error" aria-live="assertive">
-      <p>{{ errorMessage() }}</p>
-      <button type="button" class="retry-button" (click)="reloadItems()">Riprova</button>
-    </section>
-  } @else if (categoryCards().length === 0) {
-    <section class="status-panel" aria-live="polite">
-      <p>Nessuna categoria trovata nella risposta API.</p>
-    </section>
-  } @else {
-    @if (hasDueProducts() || hasExpiredProducts() || hasMissingProducts()) {
-      <section class="volatile-actions" aria-label="Azioni rapide stock volatile">
-        @if (hasDueProducts()) {
-          <button type="button" class="volatile-action-button" (click)="openVolatileSection('due')">
-            In scadenza
-          </button>
-        }
-        @if (hasExpiredProducts()) {
-          <button type="button" class="volatile-action-button volatile-action-button-danger" (click)="openVolatileSection('expired')">
-            Scaduti
-          </button>
-        }
-        @if (hasMissingProducts()) {
-          <button type="button" class="volatile-action-button volatile-action-button-warning" (click)="openVolatileSection('missing')">
-            Mancanti
-          </button>
-        }
-      </section>
-    }
+  <nav class="section-grid" aria-label="Sezioni principali">
+    <a routerLink="/dispensa" class="section-card section-card-dispensa" aria-label="Vai alla dispensa">
+      <span class="section-icon" aria-hidden="true">🥫</span>
+      <span class="section-title">Dispensa</span>
+      <span class="section-desc">Esplora il tuo stock alimentare per categoria</span>
+    </a>
 
-    <section class="planner-banner" aria-label="Pianificatore pasto">
-      <div class="planner-banner-text">
-        <p class="planner-banner-title">Pianifica il tuo pasto</p>
-        <p class="planner-banner-subtitle">Componi un pasto equilibrato seguendo la dieta mediterranea</p>
-      </div>
-      <button type="button" class="planner-banner-button" (click)="openMealPlanner()" aria-label="Apri il pianificatore pasto">
-        Inizia →
-      </button>
-    </section>
+    <a routerLink="/pianificatore-pasto" class="section-card section-card-planner" aria-label="Vai al pianificatore pasto">
+      <span class="section-icon" aria-hidden="true">🥗</span>
+      <span class="section-title">Meal Planner</span>
+      <span class="section-desc">Componi un pasto equilibrato seguendo la dieta mediterranea</span>
+    </a>
 
-    <section class="category-grid" aria-label="Macrocategorie alimentari">
-      @for (category of categoryCards(); track category.key) {
-        <button
-          type="button"
-          class="category-card"
-          [class.category-card-muted]="isVirtualNoMacroCategory(category.key)"
-          [attr.aria-label]="category.title"
-          (click)="openCategory(category.key)"
-        >
-          <span class="category-title">{{ category.title }}</span>
-          @if (category.subtitle) {
-            <span class="category-subtitle">{{ category.subtitle }}</span>
-          }
-          <span class="category-count">{{ category.itemCount }} alimenti</span>
-        </button>
-      }
-    </section>
-  }
+    <a routerLink="/spesa" class="section-card section-card-spesa" aria-label="Vai alla spesa">
+      <span class="section-icon" aria-hidden="true">🛒</span>
+      <span class="section-title">Spesa</span>
+      <span class="section-desc">Gestisci la tua lista della spesa</span>
+    </a>
+  </nav>
 </main>

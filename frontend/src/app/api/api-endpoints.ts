@@ -1,8 +1,10 @@
-import { Injectable } from '@angular/core';
-import { environment } from '../../environments/environment';
+import { Injectable, inject } from '@angular/core';
+import { RuntimeConfigService } from '../services/runtime-config.service';
 
 @Injectable({ providedIn: 'root' })
 export class ApiEndpointsService {
+  private readonly runtimeConfig = inject(RuntimeConfigService);
+
   products(): string {
     return `${this.apiPrefix}/products`;
   }
@@ -28,7 +30,6 @@ export class ApiEndpointsService {
   }
 
   private get apiPrefix(): string {
-    const normalizedBackendBaseUrl = environment.backendApiBaseUrl.replace(/\/+$/, '');
-    return `${normalizedBackendBaseUrl}/grocy`;
+    return `${this.runtimeConfig.backendApiBaseUrl}/grocy`;
   }
 }

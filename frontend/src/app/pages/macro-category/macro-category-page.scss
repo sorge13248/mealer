@@ -29,6 +29,7 @@ $accent-base: #337ab7;
 
 .back-button,
 .retry-button {
+  text-decoration: none;
   border: 1px solid #{rgba($accent-base, 0.92)};
   background: #{rgba($accent-base, 0.24)};
   color: #eef8ff;

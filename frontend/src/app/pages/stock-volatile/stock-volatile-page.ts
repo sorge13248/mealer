@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
 import { ItemCardComponent } from '../../components/item-card/item-card';
@@ -49,7 +49,7 @@ interface VolatileViewItem extends Item {
 @Component({
   selector: 'app-stock-volatile-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingSpinnerComponent, ItemCardComponent],
+  imports: [LoadingSpinnerComponent, ItemCardComponent, RouterLink],
   templateUrl: './stock-volatile-page.html',
   styleUrl: './stock-volatile-page.scss'
 })
@@ -57,7 +57,6 @@ export class StockVolatilePage {
   private readonly http = inject(HttpClient);
   private readonly apiEndpoints = inject(ApiEndpointsService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly isLoading = signal(true);
@@ -128,10 +127,6 @@ export class StockVolatilePage {
         this.section.set(section);
         this.loadVolatileStock();
       });
-  }
-
-  protected goBack(): void {
-    this.router.navigate(['/']);
   }
 
   protected reloadItems(): void {

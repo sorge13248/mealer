@@ -6,6 +6,10 @@ export const routes: Routes = [
 		loadComponent: () => import('./pages/home/home-page').then((module) => module.HomePage)
 	},
 	{
+		path: 'dispensa',
+		loadComponent: () => import('./pages/dispensa/dispensa-page').then((module) => module.DispensaPage)
+	},
+	{
 		path: 'macrocategoria/:macroCategory',
 		loadComponent: () =>
 			import('./pages/macro-category/macro-category-page').then((module) => module.MacroCategoryPage)
@@ -19,5 +23,9 @@ export const routes: Routes = [
 		path: 'pianificatore-pasto',
 		loadComponent: () =>
 			import('./pages/meal-planner/meal-planner-page').then((module) => module.MealPlannerPage)
+	},
+	{
+		path: 'spesa',
+		loadComponent: () => import('./pages/spesa/spesa-page').then((module) => module.SpesaPage)
 	}
 ];

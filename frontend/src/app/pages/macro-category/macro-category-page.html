@@ -1,6 +1,6 @@
 <main class="page">
   <header class="page-header">
-    <button type="button" class="back-button" (click)="goBack()">&lt; Torna alle categorie</button>
+    <a routerLink="/" class="back-button">&lt; Torna alle categorie</a>
 
     <h1>{{ parsedCategory().title }}</h1>
     @if (parsedCategory().subtitle) {

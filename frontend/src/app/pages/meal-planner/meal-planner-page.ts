@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
 import { ItemCardComponent, ItemConsumedEvent } from '../../components/item-card/item-card';
@@ -91,7 +91,7 @@ interface PersistedMealSelection {
 @Component({
   selector: 'app-meal-planner-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingSpinnerComponent, ItemCardComponent],
+  imports: [LoadingSpinnerComponent, ItemCardComponent, RouterLink],
   templateUrl: './meal-planner-page.html',
   styleUrl: './meal-planner-page.scss',
   host: {
@@ -101,7 +101,6 @@ interface PersistedMealSelection {
 export class MealPlannerPage {
   private readonly http = inject(HttpClient);
   private readonly apiEndpoints = inject(ApiEndpointsService);
-  private readonly router = inject(Router);
   private saveFeedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly isLoading = signal(true);
@@ -454,10 +453,6 @@ export class MealPlannerPage {
     window.localStorage.removeItem(MEAL_SELECTION_STORAGE_KEY);
     this.hasPersistedMealSelection.set(false);
     this.isMealSelectionSaved.set(false);
-  }
-
-  protected goBack(): void {
-    this.router.navigate(['/']);
   }
 
   protected reloadItems(): void {

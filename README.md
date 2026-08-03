@@ -41,6 +41,9 @@ npm run test
 
 Vedi docker-compose.yml alla root e backend/Dockerfile.prod.
 
+Il frontend Angular carica `/config.json` a runtime.
+Con `docker-compose` il file viene montato da `./config.json` verso `/usr/share/nginx/html/config.json`, quindi puoi cambiare le impostazioni senza rebuild dell'immagine.
+
 ## GitHub Actions (monorepo)
 
 Le workflow sono alla root in `.github/workflows`:

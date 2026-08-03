@@ -1,0 +1,58 @@
+<main class="page">
+  <header class="page-header">
+    <h1>Dispensa</h1>
+    <p class="lead">Esplora le categorie di alimenti nel tuo stock</p>
+  </header>
+
+  @if (isLoading()) {
+    <section class="status-panel" aria-live="polite" aria-busy="true">
+      <app-loading-spinner label="Caricamento categorie"></app-loading-spinner>
+    </section>
+  } @else if (errorMessage()) {
+    <section class="status-panel status-panel-error" aria-live="assertive">
+      <p>{{ errorMessage() }}</p>
+      <button type="button" class="retry-button" (click)="reloadItems()">Riprova</button>
+    </section>
+  } @else if (categoryCards().length === 0) {
+    <section class="status-panel" aria-live="polite">
+      <p>Nessuna categoria trovata nella risposta API.</p>
+    </section>
+  } @else {
+    @if (hasDueProducts() || hasExpiredProducts() || hasMissingProducts()) {
+      <section class="volatile-actions" aria-label="Azioni rapide stock volatile">
+        @if (hasDueProducts()) {
+          <a routerLink="/stock-volatile/due" class="volatile-action-button">
+            In scadenza
+          </a>
+        }
+        @if (hasExpiredProducts()) {
+          <a routerLink="/stock-volatile/expired" class="volatile-action-button volatile-action-button-danger">
+            Scaduti
+          </a>
+        }
+        @if (hasMissingProducts()) {
+          <a routerLink="/stock-volatile/missing" class="volatile-action-button volatile-action-button-warning">
+            Mancanti
+          </a>
+        }
+      </section>
+    }
+
+    <section class="category-grid" aria-label="Macrocategorie alimentari">
+      @for (category of categoryCards(); track category.key) {
+        <a
+          class="category-card"
+          [class.category-card-muted]="isVirtualNoMacroCategory(category.key)"
+          [attr.aria-label]="category.title"
+          [routerLink]="['/macrocategoria', category.key]"
+        >
+          <span class="category-title">{{ category.title }}</span>
+          @if (category.subtitle) {
+            <span class="category-subtitle">{{ category.subtitle }}</span>
+          }
+          <span class="category-count">{{ category.itemCount }} alimenti</span>
+        </a>
+      }
+    </section>
+  }
+</main>

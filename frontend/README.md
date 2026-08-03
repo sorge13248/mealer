@@ -43,6 +43,22 @@ Open `http://localhost:4200`.
 
 The frontend calls the backend at `http://localhost:3000` by default (see `src/environments/environment.ts`).
 
+### Runtime config (`config.json`)
+
+At startup, the app loads `/config.json` and uses it to override runtime settings.
+
+Example:
+
+```json
+{
+  "backendApiBaseUrl": "http://localhost:3000"
+}
+```
+
+Default file for local build: `public/config.json`.
+
+In Docker Compose, runtime config is mounted from `frontend/runtime-config/config.json` to `/usr/share/nginx/html/config.json`, so you can change configuration without rebuilding the frontend image.
+
 ### 4. Build and test
 
 ```bash

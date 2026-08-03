@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
 import { ItemCardComponent } from '../../components/item-card/item-card';
@@ -26,7 +26,7 @@ type MacroCategoryViewItem = ItemWithStockSummary;
 @Component({
   selector: 'app-macro-category-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingSpinnerComponent, ItemCardComponent],
+  imports: [LoadingSpinnerComponent, ItemCardComponent, RouterLink],
   templateUrl: './macro-category-page.html',
   styleUrl: './macro-category-page.scss'
 })
@@ -34,7 +34,6 @@ export class MacroCategoryPage {
   private readonly http = inject(HttpClient);
   private readonly apiEndpoints = inject(ApiEndpointsService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly isLoading = signal(true);
@@ -78,10 +77,6 @@ export class MacroCategoryPage {
         this.macroCategory.set(decodedMacroCategory);
         this.loadItems();
       });
-  }
-
-  protected goBack(): void {
-    this.router.navigate(['/']);
   }
 
   protected reloadItems(): void {

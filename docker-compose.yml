@@ -1,4 +1,12 @@
 services:
+  frontend:
+    image: ghcr.io/sorge13248/mealer-frontend
+    container_name: mealer-frontend
+    ports:
+      - 8080:8080
+    volumes:
+      - ./config.json:/usr/share/nginx/html/config.json:ro
+
   backend:
     container_name: mealer-backend
     image: ghcr.io/sorge13248/mealer-backend
