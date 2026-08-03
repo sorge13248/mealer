@@ -4,6 +4,11 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
+interface HealthResponseBody {
+  status?: unknown;
+  timestamp?: unknown;
+}
+
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
@@ -27,11 +32,12 @@ describe('AppController (e2e)', () => {
     const response = await request(app.getHttpServer())
       .get('/health')
       .expect(200);
+    const body = response.body as HealthResponseBody;
 
-    expect(response.body).toMatchObject({
+    expect(body).toMatchObject({
       status: 'ok',
     });
-    expect(typeof response.body.timestamp).toBe('string');
+    expect(typeof body.timestamp).toBe('string');
   });
 
   afterEach(async () => {

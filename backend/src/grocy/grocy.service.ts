@@ -137,7 +137,7 @@ export class GrocyService {
   private throwAsHttpException(error: unknown): never {
     if (error instanceof AxiosError) {
       const statusCode = error.response?.status ?? HttpStatus.BAD_GATEWAY;
-      const responseData = error.response?.data;
+      const responseData: unknown = error.response?.data;
 
       throw new HttpException(
         {
@@ -158,14 +158,35 @@ export class GrocyService {
     }
 
     if (Array.isArray(value)) {
-      return value.join(',');
+      return value
+        .map((entry) => {
+          if (typeof entry === 'string') {
+            return entry;
+          }
+
+          if (typeof entry === 'number' || typeof entry === 'boolean') {
+            return String(entry);
+          }
+
+          return '';
+        })
+        .filter(Boolean)
+        .join(',');
     }
 
     if (value === null || value === undefined) {
       return undefined;
     }
 
-    return String(value);
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    return undefined;
   }
 
   private readConfig(): GrocyConfig {

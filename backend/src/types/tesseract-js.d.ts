@@ -6,7 +6,9 @@ declare module 'tesseract.js' {
   }
 
   export interface TesseractWorker {
-    recognize(image: Buffer | Uint8Array | string): Promise<TesseractRecognizeResult>;
+    recognize(
+      image: Buffer | Uint8Array | string,
+    ): Promise<TesseractRecognizeResult>;
     terminate(): Promise<void>;
   }
 

@@ -37,12 +37,13 @@ export class SpesaController {
   ): Promise<ShoppingInsightsResponse> {
     const parsedDays = Number(daysRaw);
     const days = Number.isFinite(parsedDays) ? parsedDays : undefined;
-    const productIds = typeof productIdsRaw === 'string'
-      ? productIdsRaw
-          .split(',')
-          .map((value) => Number(value.trim()))
-          .filter((value) => Number.isInteger(value) && value > 0)
-      : undefined;
+    const productIds =
+      typeof productIdsRaw === 'string'
+        ? productIdsRaw
+            .split(',')
+            .map((value) => Number(value.trim()))
+            .filter((value) => Number.isInteger(value) && value > 0)
+        : undefined;
 
     return this.spesaService.getShoppingInsights({
       days,

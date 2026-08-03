@@ -1,8 +1,13 @@
-import { BadRequestException, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { createHash } from 'node:crypto';
 import { createWorker } from 'tesseract.js';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { GrocyService } from '../grocy/grocy.service';
 
 const RECEIPT_ITEM_REGEX =
@@ -199,6 +204,10 @@ interface ExistingReceiptRow {
   id: number;
 }
 
+interface IdRow {
+  id: number | string;
+}
+
 interface ExistingReceiptCandidateRow {
   id: number;
   raw_text: string | null;
@@ -268,6 +277,107 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    await this.dataSource.query(`PRAGMA foreign_keys = ON`);
+
+    // Normalized store dimension.
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS stores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_key TEXT NOT NULL UNIQUE,
+        store_name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // Snapshot of Grocy products used by mappings and receipt items.
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS grocy_products (
+        id INTEGER PRIMARY KEY,
+        name_snapshot TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // Canonical receipt-side product name dictionary.
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS receipt_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_name_raw TEXT NOT NULL,
+        receipt_name_normalized TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS receipt_product_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id INTEGER NOT NULL,
+        receipt_product_id INTEGER NOT NULL,
+        grocy_product_id INTEGER NOT NULL,
+        confidence REAL NOT NULL DEFAULT 1,
+        usage_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (store_id) REFERENCES stores(id),
+        FOREIGN KEY (receipt_product_id) REFERENCES receipt_products(id),
+        FOREIGN KEY (grocy_product_id) REFERENCES grocy_products(id),
+        UNIQUE(store_id, receipt_product_id)
+      )
+    `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS normalized_receipts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id INTEGER NOT NULL,
+        purchased_at TEXT NOT NULL,
+        source TEXT,
+        file_name TEXT,
+        subtotal REAL,
+        total REAL,
+        raw_text TEXT,
+        fingerprint TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (store_id) REFERENCES stores(id)
+      )
+    `);
+
+    await this.dataSource.query(`
+      CREATE INDEX IF NOT EXISTS idx_normalized_receipts_store_date
+      ON normalized_receipts(store_id, purchased_at)
+    `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS normalized_receipt_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_id INTEGER NOT NULL,
+        receipt_product_id INTEGER NOT NULL,
+        grocy_product_id INTEGER NOT NULL,
+        quantity REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        discount_total REAL NOT NULL,
+        line_total_discounted REAL NOT NULL,
+        vat_rate REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (receipt_id) REFERENCES normalized_receipts(id),
+        FOREIGN KEY (receipt_product_id) REFERENCES receipt_products(id),
+        FOREIGN KEY (grocy_product_id) REFERENCES grocy_products(id)
+      )
+    `);
+
+    await this.dataSource.query(`
+      CREATE INDEX IF NOT EXISTS idx_normalized_receipt_items_receipt
+      ON normalized_receipt_items(receipt_id)
+    `);
+
+    await this.dataSource.query(`
+      CREATE INDEX IF NOT EXISTS idx_normalized_receipt_items_product
+      ON normalized_receipt_items(grocy_product_id)
+    `);
+
+    // Legacy tables are kept for backward compatibility and data migration only.
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS receipt_product_mapping (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -352,6 +462,8 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       CREATE INDEX IF NOT EXISTS idx_price_history_product_store_date
       ON product_price_history(grocy_product_id, store_key, observed_at)
     `);
+
+    await this.migrateLegacySpesaTablesToNormalizedSchema();
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -390,7 +502,10 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const items = this.extractItemsFromReceiptText(rawText);
     const storeName = this.extractStoreName(rawText);
     const storeKey = this.normalizeStoreKey(storeName);
-    const subtotal = this.extractTotalValue(rawText, /SUBTOTALE\s+(\d+[.,]\d{2})/i);
+    const subtotal = this.extractTotalValue(
+      rawText,
+      /SUBTOTALE\s+(\d+[.,]\d{2})/i,
+    );
     const total = this.extractTotalValue(
       rawText,
       /TOTALE\s+COMPLESSIVO\s+(\d+[.,]\d{2})/i,
@@ -444,7 +559,6 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const results: MatchCandidatesResponseItem[] = [];
 
     for (const [receiptNameNormalized, receiptName] of deduplicatedItems) {
-
       const storedMapping = await this.findStoredMapping(
         storeKey,
         receiptNameNormalized,
@@ -493,7 +607,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async saveMappings(request: SaveMappingsRequest): Promise<SaveMappingsResponse> {
+  async saveMappings(
+    request: SaveMappingsRequest,
+  ): Promise<SaveMappingsResponse> {
     const mappings = Array.isArray(request.mappings) ? request.mappings : [];
     if (mappings.length === 0) {
       throw new BadRequestException('Nessun mapping da salvare.');
@@ -502,6 +618,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const storeName = this.normalizeStoreName(request.storeName);
     const storeKey = this.normalizeStoreKey(storeName);
     const now = new Date().toISOString();
+    const storeId = await this.ensureStoreId(storeKey, storeName);
     let savedCount = 0;
 
     for (const mapping of mappings) {
@@ -511,48 +628,41 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       const grocyProductName = (mapping.grocyProductName ?? '').trim();
       const confidence = this.normalizeConfidence(mapping.confidence);
 
-      if (!receiptNameNormalized || !Number.isInteger(grocyProductId) || !grocyProductName) {
+      if (
+        !receiptNameNormalized ||
+        !Number.isInteger(grocyProductId) ||
+        !grocyProductName
+      ) {
         continue;
       }
 
+      const receiptProductId = await this.ensureReceiptProductId(
+        receiptNameRaw,
+        receiptNameNormalized,
+      );
+      await this.upsertGrocyProductSnapshot(grocyProductId, grocyProductName);
+
       await this.dataSource.query(
         `
-          INSERT INTO receipt_product_mapping (
-            store_key,
-            store_name,
-            receipt_name_raw,
-            receipt_name_normalized,
+          INSERT INTO receipt_product_mappings (
+            store_id,
+            receipt_product_id,
             grocy_product_id,
-            grocy_product_name_snapshot,
             confidence,
             usage_count,
             last_used_at,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-          ON CONFLICT(store_key, receipt_name_normalized)
+          ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+          ON CONFLICT(store_id, receipt_product_id)
           DO UPDATE SET
-            store_name = excluded.store_name,
-            receipt_name_raw = excluded.receipt_name_raw,
             grocy_product_id = excluded.grocy_product_id,
-            grocy_product_name_snapshot = excluded.grocy_product_name_snapshot,
             confidence = excluded.confidence,
-            usage_count = receipt_product_mapping.usage_count + 1,
+            usage_count = receipt_product_mappings.usage_count + 1,
             last_used_at = excluded.last_used_at,
             updated_at = excluded.updated_at
         `,
-        [
-          storeKey,
-          storeName,
-          receiptNameRaw,
-          receiptNameNormalized,
-          grocyProductId,
-          grocyProductName,
-          confidence,
-          now,
-          now,
-          now,
-        ],
+        [storeId, receiptProductId, grocyProductId, confidence, now, now, now],
       );
 
       savedCount += 1;
@@ -595,7 +705,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         const grocyProductName = (item.grocyProductName ?? '').trim();
         const quantity = this.normalizePositiveNumber(item.quantity);
         const unitPrice = this.normalizePositiveNumber(item.unitPrice);
-        const discountTotal = this.normalizeNonNegativeNumber(item.discountTotal);
+        const discountTotal = this.normalizeNonNegativeNumber(
+          item.discountTotal,
+        );
         const lineTotalDiscounted = this.normalizePositiveNumber(
           item.lineTotalDiscounted,
         );
@@ -636,8 +748,14 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     await queryRunner.startTransaction();
 
     try {
+      const storeId = await this.ensureStoreId(
+        storeKey,
+        storeName,
+        queryRunner,
+      );
+
       const existingRows = (await queryRunner.query(
-        `SELECT id FROM receipts WHERE fingerprint = ? LIMIT 1`,
+        `SELECT id FROM normalized_receipts WHERE fingerprint = ? LIMIT 1`,
         [fingerprint],
       )) as ExistingReceiptRow[];
 
@@ -653,9 +771,8 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
       await queryRunner.query(
         `
-          INSERT INTO receipts (
-            store_key,
-            store_name,
+          INSERT INTO normalized_receipts (
+            store_id,
             purchased_at,
             source,
             file_name,
@@ -664,11 +781,10 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
             raw_text,
             fingerprint,
             created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
-          storeKey,
-          storeName,
+          storeId,
           purchasedAt,
           source,
           fileName,
@@ -686,64 +802,47 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       const receiptId = Number(receiptIdRows[0]?.id ?? 0);
 
       if (!Number.isInteger(receiptId) || receiptId <= 0) {
-        throw new BadRequestException('Impossibile determinare l\'id dello scontrino salvato.');
+        throw new BadRequestException(
+          "Impossibile determinare l'id dello scontrino salvato.",
+        );
       }
 
       for (const item of normalizedItems) {
+        const receiptProductId = await this.ensureReceiptProductId(
+          item.receiptName,
+          item.receiptNameNormalized,
+          queryRunner,
+        );
+
+        await this.upsertGrocyProductSnapshot(
+          item.grocyProductId,
+          item.grocyProductName,
+          queryRunner,
+        );
+
         await queryRunner.query(
           `
-            INSERT INTO receipt_items (
+            INSERT INTO normalized_receipt_items (
               receipt_id,
-              store_key,
-              receipt_product_name,
-              receipt_product_name_normalized,
+              receipt_product_id,
               grocy_product_id,
-              grocy_product_name_snapshot,
               quantity,
               unit_price,
               discount_total,
               line_total_discounted,
               vat_rate,
               created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           [
             receiptId,
-            storeKey,
-            item.receiptName,
-            item.receiptNameNormalized,
+            receiptProductId,
             item.grocyProductId,
-            item.grocyProductName,
             item.quantity,
             item.unitPrice,
             item.discountTotal,
             item.lineTotalDiscounted,
             item.vatRate,
-            now,
-          ],
-        );
-
-        await queryRunner.query(
-          `
-            INSERT INTO product_price_history (
-              receipt_id,
-              grocy_product_id,
-              store_key,
-              observed_at,
-              unit_price,
-              quantity,
-              line_total_discounted,
-              created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-          [
-            receiptId,
-            item.grocyProductId,
-            storeKey,
-            purchasedAt,
-            item.unitPrice,
-            item.quantity,
-            item.lineTotalDiscounted,
             now,
           ],
         );
@@ -773,77 +872,84 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const selectedProductIds = Array.isArray(input.productIds)
       ? input.productIds.filter((value) => Number.isInteger(value) && value > 0)
       : [];
-    const selectedProductIdsUnique = [...new Set(selectedProductIds)].slice(0, 12);
-    const periodStart = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+    const selectedProductIdsUnique = [...new Set(selectedProductIds)].slice(
+      0,
+      12,
+    );
+    const periodStart = new Date(
+      Date.now() - periodDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
-    const overviewRows = (await this.dataSource.query(
+    const overviewRows = await this.queryRows<ShoppingInsightsOverviewRow>(
       `
         SELECT
           COUNT(*) as receipts_count,
           COALESCE(SUM(total), 0) as total_spent,
           COALESCE(AVG(total), 0) as average_receipt_total
-        FROM receipts
+        FROM normalized_receipts
         WHERE purchased_at >= ?
       `,
       [periodStart],
-    )) as ShoppingInsightsOverviewRow[];
+    );
 
-    const monthlyTotalsRows = (await this.dataSource.query(
-      `
+    const monthlyTotalsRows =
+      await this.queryRows<ShoppingInsightsMonthlyTotalRow>(
+        `
         SELECT
           substr(purchased_at, 1, 7) as month,
           COALESCE(SUM(total), 0) as total_spent
-        FROM receipts
+        FROM normalized_receipts
         WHERE purchased_at >= ?
         GROUP BY substr(purchased_at, 1, 7)
         ORDER BY month ASC
       `,
-      [periodStart],
-    )) as ShoppingInsightsMonthlyTotalRow[];
+        [periodStart],
+      );
 
-    const monthlyReceiptsRows = (await this.dataSource.query(
-      `
+    const monthlyReceiptsRows =
+      await this.queryRows<ShoppingInsightsMonthlyReceiptRow>(
+        `
         SELECT
           substr(purchased_at, 1, 7) as month,
           COUNT(*) as receipts_count,
           COALESCE(AVG(total), 0) as average_receipt_total
-        FROM receipts
+        FROM normalized_receipts
         WHERE purchased_at >= ?
         GROUP BY substr(purchased_at, 1, 7)
         ORDER BY month ASC
       `,
-      [periodStart],
-    )) as ShoppingInsightsMonthlyReceiptRow[];
+        [periodStart],
+      );
 
-    const topProductsRows = (await this.dataSource.query(
+    const topProductsRows = await this.queryRows<ShoppingInsightsTopProductRow>(
       `
         SELECT
-          p.grocy_product_id,
-          COALESCE(MAX(i.grocy_product_name_snapshot), 'Prodotto #' || p.grocy_product_id) as grocy_product_name,
-          COALESCE(SUM(p.line_total_discounted), 0) as total_spent,
-          COALESCE(AVG(p.unit_price), 0) as average_unit_price,
-          COALESCE(MIN(p.unit_price), 0) as min_unit_price,
-          COALESCE(MAX(p.unit_price), 0) as max_unit_price,
+          ri.grocy_product_id,
+          COALESCE(MAX(gp.name_snapshot), 'Prodotto #' || ri.grocy_product_id) as grocy_product_name,
+          COALESCE(SUM(ri.line_total_discounted), 0) as total_spent,
+          COALESCE(AVG(ri.unit_price), 0) as average_unit_price,
+          COALESCE(MIN(ri.unit_price), 0) as min_unit_price,
+          COALESCE(MAX(ri.unit_price), 0) as max_unit_price,
           COALESCE((
-            SELECT p2.unit_price
-            FROM product_price_history p2
-            WHERE p2.grocy_product_id = p.grocy_product_id
-              AND p2.observed_at >= ?
-            ORDER BY p2.observed_at DESC, p2.id DESC
+            SELECT ri2.unit_price
+            FROM normalized_receipt_items ri2
+            INNER JOIN normalized_receipts r2 ON r2.id = ri2.receipt_id
+            WHERE ri2.grocy_product_id = ri.grocy_product_id
+              AND r2.purchased_at >= ?
+            ORDER BY r2.purchased_at DESC, ri2.id DESC
             LIMIT 1
           ), 0) as last_unit_price,
           COUNT(*) as observations
-        FROM product_price_history p
-        LEFT JOIN receipt_items i
-          ON i.receipt_id = p.receipt_id
-          AND i.grocy_product_id = p.grocy_product_id
-        WHERE p.observed_at >= ?
-        GROUP BY p.grocy_product_id
+        FROM normalized_receipt_items ri
+        INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+        LEFT JOIN grocy_products gp ON gp.id = ri.grocy_product_id
+        WHERE r.purchased_at >= ?
+        GROUP BY ri.grocy_product_id
         ORDER BY total_spent DESC
         LIMIT ?
       `,
       [periodStart, periodStart, TOP_PRODUCTS_LIMIT],
-    )) as ShoppingInsightsTopProductRow[];
+    );
 
     const topProductIds = topProductsRows
       .map((row) => Number(row.grocy_product_id))
@@ -852,22 +958,27 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const medianByProductId = new Map<number, number>();
     if (topProductIds.length > 0) {
       const placeholders = topProductIds.map(() => '?').join(', ');
-      const medianRows = (await this.dataSource.query(
+      const medianRows = await this.queryRows<ProductMedianRow>(
         `
           SELECT grocy_product_id, unit_price
-          FROM product_price_history
-          WHERE observed_at >= ?
+          FROM normalized_receipt_items ri
+          INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+          WHERE r.purchased_at >= ?
             AND grocy_product_id IN (${placeholders})
           ORDER BY grocy_product_id ASC, unit_price ASC
         `,
         [periodStart, ...topProductIds],
-      )) as ProductMedianRow[];
+      );
 
       const valuesByProductId = new Map<number, number[]>();
       for (const row of medianRows) {
         const productId = Number(row.grocy_product_id);
         const unitPrice = Number(row.unit_price);
-        if (!Number.isInteger(productId) || productId <= 0 || !Number.isFinite(unitPrice)) {
+        if (
+          !Number.isInteger(productId) ||
+          productId <= 0 ||
+          !Number.isFinite(unitPrice)
+        ) {
           continue;
         }
 
@@ -886,30 +997,32 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     let trendRows: ShoppingInsightsTrendRow[] = [];
     if (selectedProductIdsUnique.length > 0) {
       const placeholders = selectedProductIdsUnique.map(() => '?').join(', ');
-      trendRows = (await this.dataSource.query(
+      trendRows = await this.queryRows<ShoppingInsightsTrendRow>(
         `
           SELECT
-            p.grocy_product_id,
-            COALESCE(MAX(i.grocy_product_name_snapshot), 'Prodotto #' || p.grocy_product_id) as grocy_product_name,
-            p.observed_at,
-            p.receipt_id,
-            p.unit_price,
-            p.quantity,
-            p.line_total_discounted
-          FROM product_price_history p
-          LEFT JOIN receipt_items i
-            ON i.receipt_id = p.receipt_id
-            AND i.grocy_product_id = p.grocy_product_id
-          WHERE p.observed_at >= ?
-            AND p.grocy_product_id IN (${placeholders})
-          GROUP BY p.id
-          ORDER BY p.grocy_product_id ASC, p.observed_at ASC, p.id ASC
+            ri.grocy_product_id,
+            COALESCE(MAX(gp.name_snapshot), 'Prodotto #' || ri.grocy_product_id) as grocy_product_name,
+            r.purchased_at as observed_at,
+            ri.receipt_id,
+            ri.unit_price,
+            ri.quantity,
+            ri.line_total_discounted
+          FROM normalized_receipt_items ri
+          INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+          LEFT JOIN grocy_products gp ON gp.id = ri.grocy_product_id
+          WHERE r.purchased_at >= ?
+            AND ri.grocy_product_id IN (${placeholders})
+          GROUP BY ri.id
+          ORDER BY ri.grocy_product_id ASC, r.purchased_at ASC, ri.id ASC
         `,
         [periodStart, ...selectedProductIdsUnique],
-      )) as ShoppingInsightsTrendRow[];
+      );
     }
 
-    const selectedProductsTrendById = new Map<number, ShoppingInsightsProductTrend>();
+    const selectedProductsTrendById = new Map<
+      number,
+      ShoppingInsightsProductTrend
+    >();
     for (const row of trendRows) {
       const productId = Number(row.grocy_product_id);
       if (!Number.isInteger(productId) || productId <= 0) {
@@ -919,7 +1032,8 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       if (!selectedProductsTrendById.has(productId)) {
         selectedProductsTrendById.set(productId, {
           grocyProductId: productId,
-          grocyProductName: (row.grocy_product_name ?? '').trim() || `Prodotto #${productId}`,
+          grocyProductName:
+            (row.grocy_product_name ?? '').trim() || `Prodotto #${productId}`,
           points: [],
         });
       }
@@ -929,7 +1043,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         receiptId: Number(row.receipt_id) || 0,
         unitPrice: this.roundMoney(Number(row.unit_price) || 0),
         quantity: this.roundMoney(Number(row.quantity) || 0),
-        lineTotalDiscounted: this.roundMoney(Number(row.line_total_discounted) || 0),
+        lineTotalDiscounted: this.roundMoney(
+          Number(row.line_total_discounted) || 0,
+        ),
       });
     }
 
@@ -950,12 +1066,15 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       monthlyReceipts: monthlyReceiptsRows.map((row) => ({
         month: row.month,
         receiptsCount: Number(row.receipts_count),
-        averageReceiptTotal: this.roundMoney(Number(row.average_receipt_total ?? 0)),
+        averageReceiptTotal: this.roundMoney(
+          Number(row.average_receipt_total ?? 0),
+        ),
       })),
       topProductsBySpend: topProductsRows.map((row) => ({
         grocyProductId: Number(row.grocy_product_id),
         grocyProductName:
-          (row.grocy_product_name ?? '').trim() || `Prodotto #${String(row.grocy_product_id)}`,
+          (row.grocy_product_name ?? '').trim() ||
+          `Prodotto #${String(row.grocy_product_id)}`,
         totalSpent: this.roundMoney(Number(row.total_spent ?? 0)),
         averageUnitPrice: this.roundMoney(Number(row.average_unit_price ?? 0)),
         minUnitPrice: this.roundMoney(Number(row.min_unit_price ?? 0)),
@@ -1057,15 +1176,16 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      const previousLineQuantityMatch = previousNormalizedLine?.match(
-        QUANTITY_HINT_REGEX,
-      );
+      const previousLineQuantityMatch =
+        previousNormalizedLine?.match(QUANTITY_HINT_REGEX);
       let quantity = 1;
       let unitPrice = parsedPrice;
       let totalPrice = parsedPrice;
 
       if (previousLineQuantityMatch?.groups) {
-        const hintedQuantity = Number(previousLineQuantityMatch.groups.quantity);
+        const hintedQuantity = Number(
+          previousLineQuantityMatch.groups.quantity,
+        );
         const hintedUnitPrice = this.parseMoneyValue(
           previousLineQuantityMatch.groups.unitPrice,
         );
@@ -1113,7 +1233,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    const fallbackPriceMatch = normalizedLine.match(/(?<price>-?\d+[.,]\d{2})\s*$/);
+    const fallbackPriceMatch = normalizedLine.match(
+      /(?<price>-?\d+[.,]\d{2})\s*$/,
+    );
     if (!fallbackPriceMatch?.groups?.price) {
       return null;
     }
@@ -1144,7 +1266,11 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
-    if (/^(SUBTOTALE|TOTALE\s+COMPLESSIVO|DI\s+CUI\s+IVA|PAGAMENTO)/i.test(rawName)) {
+    if (
+      /^(SUBTOTALE|TOTALE\s+COMPLESSIVO|DI\s+CUI\s+IVA|PAGAMENTO)/i.test(
+        rawName,
+      )
+    ) {
       return null;
     }
 
@@ -1155,7 +1281,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async runOcrJob<T>(job: (worker: OcrWorker) => Promise<T>): Promise<T> {
+  private async runOcrJob<T>(
+    job: (worker: OcrWorker) => Promise<T>,
+  ): Promise<T> {
     const previousQueue = this.ocrQueue;
     let releaseQueue!: () => void;
     this.ocrQueue = new Promise<void>((resolve) => {
@@ -1237,19 +1365,22 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     storeKey: string,
     receiptNameNormalized: string,
   ): Promise<StoredMappingRow | null> {
-    const rows = (await this.dataSource.query(
+    const rows = await this.queryRows<StoredMappingRow>(
       `
         SELECT
-          grocy_product_id,
-          grocy_product_name_snapshot,
-          confidence
-        FROM receipt_product_mapping
-        WHERE store_key = ?
-          AND receipt_name_normalized = ?
+          rpm.grocy_product_id,
+          gp.name_snapshot as grocy_product_name_snapshot,
+          rpm.confidence
+        FROM receipt_product_mappings rpm
+        INNER JOIN stores s ON s.id = rpm.store_id
+        INNER JOIN receipt_products rp ON rp.id = rpm.receipt_product_id
+        LEFT JOIN grocy_products gp ON gp.id = rpm.grocy_product_id
+        WHERE s.store_key = ?
+          AND rp.receipt_name_normalized = ?
         LIMIT 1
       `,
       [storeKey, receiptNameNormalized],
-    )) as StoredMappingRow[];
+    );
 
     return rows[0] ?? null;
   }
@@ -1297,7 +1428,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       return 0;
     }
 
-    const overlapCount = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+    const overlapCount = [...leftTokens].filter((token) =>
+      rightTokens.has(token),
+    ).length;
     const unionCount = new Set([...leftTokens, ...rightTokens]).size;
     const tokenScore = unionCount > 0 ? overlapCount / unionCount : 0;
 
@@ -1308,7 +1441,10 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const containsBonus =
       leftName.includes(rightName) || rightName.includes(leftName) ? 0.08 : 0;
 
-    return Math.min(1, Math.max(0, tokenScore * 0.65 + charScore * 0.35 + containsBonus));
+    return Math.min(
+      1,
+      Math.max(0, tokenScore * 0.65 + charScore * 0.35 + containsBonus),
+    );
   }
 
   private levenshteinDistance(left: string, right: string): number {
@@ -1455,26 +1591,30 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     total: number | null;
     rawText: string;
   }): Promise<number | null> {
-    const rows = (await this.dataSource.query(
+    const rows = await this.queryRows<ExistingReceiptCandidateRow>(
       `
-        SELECT id, raw_text, total
-        FROM receipts
-        WHERE store_key = ?
-        ORDER BY id DESC
+        SELECT nr.id, nr.raw_text, nr.total
+        FROM normalized_receipts nr
+        INNER JOIN stores s ON s.id = nr.store_id
+        WHERE s.store_key = ?
+        ORDER BY nr.id DESC
         LIMIT 250
       `,
       [input.storeKey],
-    )) as ExistingReceiptCandidateRow[];
+    );
 
     if (rows.length === 0) {
       return null;
     }
 
     const normalizedIncomingText = this.normalizeReceiptRawText(input.rawText);
-    const roundedIncomingTotal = input.total === null ? null : this.roundMoney(input.total);
+    const roundedIncomingTotal =
+      input.total === null ? null : this.roundMoney(input.total);
 
     for (const row of rows) {
-      const normalizedStoredText = this.normalizeReceiptRawText(row.raw_text ?? '');
+      const normalizedStoredText = this.normalizeReceiptRawText(
+        row.raw_text ?? '',
+      );
       if (normalizedStoredText !== normalizedIncomingText) {
         continue;
       }
@@ -1492,6 +1632,268 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     }
 
     return null;
+  }
+
+  private async migrateLegacySpesaTablesToNormalizedSchema(): Promise<void> {
+    const now = new Date().toISOString();
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
+        SELECT DISTINCT store_key, store_name, ?, ?
+        FROM receipt_product_mapping
+      `,
+      [now, now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
+        SELECT DISTINCT store_key, store_name, ?, ?
+        FROM receipts
+      `,
+      [now, now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO receipt_products (
+          receipt_name_raw,
+          receipt_name_normalized,
+          created_at,
+          updated_at
+        )
+        SELECT DISTINCT receipt_name_raw, receipt_name_normalized, ?, ?
+        FROM receipt_product_mapping
+      `,
+      [now, now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO receipt_products (
+          receipt_name_raw,
+          receipt_name_normalized,
+          created_at,
+          updated_at
+        )
+        SELECT DISTINCT receipt_product_name, receipt_product_name_normalized, ?, ?
+        FROM receipt_items
+      `,
+      [now, now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
+        SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
+        FROM receipt_product_mapping
+      `,
+      [now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
+        SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
+        FROM receipt_items
+      `,
+      [now],
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO receipt_product_mappings (
+          store_id,
+          receipt_product_id,
+          grocy_product_id,
+          confidence,
+          usage_count,
+          last_used_at,
+          created_at,
+          updated_at
+        )
+        SELECT
+          s.id,
+          rp.id,
+          rpm.grocy_product_id,
+          rpm.confidence,
+          rpm.usage_count,
+          rpm.last_used_at,
+          rpm.created_at,
+          rpm.updated_at
+        FROM receipt_product_mapping rpm
+        INNER JOIN stores s ON s.store_key = rpm.store_key
+        INNER JOIN receipt_products rp ON rp.receipt_name_normalized = rpm.receipt_name_normalized
+      `,
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO normalized_receipts (
+          id,
+          store_id,
+          purchased_at,
+          source,
+          file_name,
+          subtotal,
+          total,
+          raw_text,
+          fingerprint,
+          created_at
+        )
+        SELECT
+          r.id,
+          s.id,
+          r.purchased_at,
+          r.source,
+          r.file_name,
+          r.subtotal,
+          r.total,
+          r.raw_text,
+          r.fingerprint,
+          r.created_at
+        FROM receipts r
+        INNER JOIN stores s ON s.store_key = r.store_key
+      `,
+    );
+
+    await this.dataSource.query(
+      `
+        INSERT OR IGNORE INTO normalized_receipt_items (
+          id,
+          receipt_id,
+          receipt_product_id,
+          grocy_product_id,
+          quantity,
+          unit_price,
+          discount_total,
+          line_total_discounted,
+          vat_rate,
+          created_at
+        )
+        SELECT
+          ri.id,
+          ri.receipt_id,
+          rp.id,
+          ri.grocy_product_id,
+          ri.quantity,
+          ri.unit_price,
+          ri.discount_total,
+          ri.line_total_discounted,
+          ri.vat_rate,
+          ri.created_at
+        FROM receipt_items ri
+        INNER JOIN normalized_receipts nr ON nr.id = ri.receipt_id
+        INNER JOIN receipt_products rp ON rp.receipt_name_normalized = ri.receipt_product_name_normalized
+      `,
+    );
+  }
+
+  private async ensureStoreId(
+    storeKey: string,
+    storeName: string,
+    queryable: Pick<QueryRunner, 'query'> | DataSource = this.dataSource,
+  ): Promise<number> {
+    const now = new Date().toISOString();
+
+    await queryable.query(
+      `
+        INSERT INTO stores (store_key, store_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(store_key)
+        DO UPDATE SET
+          store_name = excluded.store_name,
+          updated_at = excluded.updated_at
+      `,
+      [storeKey, storeName, now, now],
+    );
+
+    const rows = (await queryable.query(
+      `SELECT id FROM stores WHERE store_key = ? LIMIT 1`,
+      [storeKey],
+    )) as IdRow[];
+
+    const storeId = Number(rows[0]?.id ?? 0);
+    if (!Number.isInteger(storeId) || storeId <= 0) {
+      throw new BadRequestException(
+        'Impossibile determinare lo store interno.',
+      );
+    }
+
+    return storeId;
+  }
+
+  private async ensureReceiptProductId(
+    receiptNameRaw: string,
+    receiptNameNormalized: string,
+    queryable: Pick<QueryRunner, 'query'> | DataSource = this.dataSource,
+  ): Promise<number> {
+    const now = new Date().toISOString();
+
+    await queryable.query(
+      `
+        INSERT INTO receipt_products (
+          receipt_name_raw,
+          receipt_name_normalized,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?)
+        ON CONFLICT(receipt_name_normalized)
+        DO UPDATE SET
+          receipt_name_raw = excluded.receipt_name_raw,
+          updated_at = excluded.updated_at
+      `,
+      [receiptNameRaw, receiptNameNormalized, now, now],
+    );
+
+    const rows = (await queryable.query(
+      `
+        SELECT id
+        FROM receipt_products
+        WHERE receipt_name_normalized = ?
+        LIMIT 1
+      `,
+      [receiptNameNormalized],
+    )) as IdRow[];
+
+    const receiptProductId = Number(rows[0]?.id ?? 0);
+    if (!Number.isInteger(receiptProductId) || receiptProductId <= 0) {
+      throw new BadRequestException(
+        'Impossibile determinare il prodotto scontrino interno.',
+      );
+    }
+
+    return receiptProductId;
+  }
+
+  private async upsertGrocyProductSnapshot(
+    grocyProductId: number,
+    grocyProductName: string,
+    queryable: Pick<QueryRunner, 'query'> | DataSource = this.dataSource,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+
+    await queryable.query(
+      `
+        INSERT INTO grocy_products (id, name_snapshot, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(id)
+        DO UPDATE SET
+          name_snapshot = excluded.name_snapshot,
+          updated_at = excluded.updated_at
+      `,
+      [grocyProductId, grocyProductName, now],
+    );
+  }
+
+  private async queryRows<T>(sql: string, params: unknown[]): Promise<T[]> {
+    const result: unknown = await this.dataSource.query(sql, params);
+    if (!Array.isArray(result)) {
+      return [];
+    }
+
+    return result as T[];
   }
 
   private looksLikeDiscountRow(rawName: string): boolean {
@@ -1533,7 +1935,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     return parsedDate.toISOString();
   }
 
-  private normalizeOptionalMoney(value: number | null | undefined): number | null {
+  private normalizeOptionalMoney(
+    value: number | null | undefined,
+  ): number | null {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return null;
     }
@@ -1569,7 +1973,9 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
     const middleIndex = Math.floor(sortedValues.length / 2);
     if (sortedValues.length % 2 === 0) {
-      return this.roundMoney((sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2);
+      return this.roundMoney(
+        (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2,
+      );
     }
 
     return this.roundMoney(sortedValues[middleIndex]);
