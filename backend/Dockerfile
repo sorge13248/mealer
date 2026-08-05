@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 
 COPY package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src
@@ -18,7 +18,8 @@ WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 
 COPY package*.json ./
-RUN npm ci --omit=dev --no-audit --no-fund \
+RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts \
+    && npm rebuild better-sqlite3 --build-from-source --no-audit --no-fund \
     && npm cache clean --force \
     && apk del .build-deps
 
