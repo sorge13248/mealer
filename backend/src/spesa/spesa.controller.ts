@@ -2,11 +2,14 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
+  Logger,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -21,6 +24,9 @@ import {
   type SaveReceiptResponse,
   type SaveMappingsRequest,
   type SaveMappingsResponse,
+  type StoredReceiptDetailResponse,
+  type StoredReceiptListResponse,
+  type DeleteStoredReceiptResponse,
   type ShoppingInsightsResponse,
 } from './spesa.service';
 
@@ -28,7 +34,49 @@ const MAX_RECEIPT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 @Controller('spesa')
 export class SpesaController {
+  private readonly logger = new Logger(SpesaController.name);
+
   constructor(private readonly spesaService: SpesaService) {}
+
+  @Get('receipts')
+  async getStoredReceipts(
+    @Query('page') pageRaw?: string,
+    @Query('pageSize') pageSizeRaw?: string,
+  ): Promise<StoredReceiptListResponse> {
+    const parsedPage = Number(pageRaw);
+    const page = Number.isFinite(parsedPage) ? parsedPage : undefined;
+
+    const parsedPageSize = Number(pageSizeRaw);
+    const pageSize = Number.isFinite(parsedPageSize)
+      ? parsedPageSize
+      : undefined;
+
+    return this.spesaService.getStoredReceipts({ page, pageSize });
+  }
+
+  @Get('receipts/:receiptId')
+  async getStoredReceiptDetail(
+    @Param('receiptId') receiptIdRaw: string,
+  ): Promise<StoredReceiptDetailResponse> {
+    const receiptId = Number(receiptIdRaw);
+    if (!Number.isInteger(receiptId) || receiptId <= 0) {
+      throw new BadRequestException('ID scontrino non valido.');
+    }
+
+    return this.spesaService.getStoredReceiptDetail(receiptId);
+  }
+
+  @Delete('receipts/:receiptId')
+  async deleteStoredReceipt(
+    @Param('receiptId') receiptIdRaw: string,
+  ): Promise<DeleteStoredReceiptResponse> {
+    const receiptId = Number(receiptIdRaw);
+    if (!Number.isInteger(receiptId) || receiptId <= 0) {
+      throw new BadRequestException('ID scontrino non valido.');
+    }
+
+    return this.spesaService.deleteStoredReceipt(receiptId);
+  }
 
   @Get('insights')
   async getShoppingInsights(
@@ -69,6 +117,10 @@ export class SpesaController {
         'File scontrino mancante nel campo "receipt".',
       );
     }
+
+    this.logger.log(
+      `parseReceipt file=${file.originalname} mime=${file.mimetype} bytes=${file.size}`,
+    );
 
     return this.spesaService.parseReceiptFile(file);
   }

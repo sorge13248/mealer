@@ -21,6 +21,25 @@ frontend/dist/
 
 # OCR language data
 *.traineddata
+*.special-words
+
+# Python (OCR service)
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+.python-version
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node package manager caches
+.npm/
+.pnpm-store/
+.yarn/
 
 # Editor/system
 .DS_Store

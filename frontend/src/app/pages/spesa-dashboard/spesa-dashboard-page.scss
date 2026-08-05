@@ -197,6 +197,19 @@ app-back-button {
   gap: 0.9rem;
 }
 
+.receipts-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.receipts-panel-header > div {
+  display: grid;
+  gap: 0.3rem;
+}
+
 .panel-header {
   display: grid;
   gap: 0.3rem;
@@ -213,6 +226,72 @@ app-back-button {
 
 .status-message-warning {
   color: #ffd8a8;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.receipts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.receipts-table th,
+.receipts-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.52rem 0.56rem;
+}
+
+.receipts-table th {
+  font-size: 0.83rem;
+  color: var(--ink-1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.receipts-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.receipts-row-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.delete-action {
+  appearance: none;
+  border-radius: 999px;
+  padding: 0.48rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 640;
+  cursor: pointer;
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  color: #ffe6e6;
+  background: rgba(110, 20, 20, 0.45);
+}
+
+.delete-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.receipts-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.receipts-pagination p {
+  color: var(--ink-1);
+}
+
+.stored-products-panel {
+  display: grid;
+  gap: 0.7rem;
 }
 
 .line-chart-wrap {
@@ -441,6 +520,10 @@ app-back-button {
 
 @media (max-width: 900px) {
   .controls-right {
+    justify-content: flex-start;
+  }
+
+  .receipts-pagination {
     justify-content: flex-start;
   }
 

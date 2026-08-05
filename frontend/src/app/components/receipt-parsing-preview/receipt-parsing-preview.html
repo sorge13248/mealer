@@ -1,0 +1,44 @@
+<header class="result-header">
+  <h2>{{ title() }}</h2>
+  <p>Sorgente: {{ preview().source === 'pdf' ? 'Testo PDF' : 'OCR Tesseract.js' }}</p>
+</header>
+
+<dl class="totals-grid">
+  <div>
+    <dt>Prodotti riconosciuti</dt>
+    <dd>{{ preview().items.length }}</dd>
+  </div>
+  <div>
+    <dt>Subtotale</dt>
+    <dd>{{ formatMoney(preview().subtotal) }}</dd>
+  </div>
+  <div>
+    <dt>Totale</dt>
+    <dd>{{ formatMoney(preview().total) }}</dd>
+  </div>
+</dl>
+
+<div class="table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Prodotto</th>
+        <th>Prezzo unit.</th>
+        <th>Qta</th>
+        <th>Sconto</th>
+        <th>Totale scontato</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of preview().items; track (item.rawName ?? item.name) + '-' + $index) {
+        <tr>
+          <td>{{ item.name }}</td>
+          <td>{{ formatMoney(item.unitPrice) }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.discountTotal > 0 ? formatMoney(item.discountTotal) : '-' }}</td>
+          <td>{{ formatMoney(toDiscountedLineTotal(item)) }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

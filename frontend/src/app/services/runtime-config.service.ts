@@ -16,6 +16,7 @@ export class RuntimeConfigService {
   }
 
   async load(): Promise<void> {
+    // Runtime override allows changing backend URL without rebuilding the frontend bundle.
     try {
       const response = await fetch('/config.json', { cache: 'no-store' });
 
@@ -41,6 +42,7 @@ export class RuntimeConfigService {
 }
 
 function normalizeBackendApiBaseUrl(value: string): string {
+  // Keep URLs canonical: trim spaces and strip trailing slashes.
   const normalizedValue = value.trim().replace(/\/+$/, '');
   return normalizedValue || environment.backendApiBaseUrl;
 }

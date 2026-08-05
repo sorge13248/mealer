@@ -30,6 +30,7 @@ export class SecureSecretsStorageService {
     }
 
     try {
+      // Decrypt persisted payload using the non-exportable key stored in IndexedDB.
       const decryptedBuffer = await crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
@@ -44,6 +45,7 @@ export class SecureSecretsStorageService {
 
       return sanitizeSecrets(parsedPayload);
     } catch {
+      // Corrupted key/payload pair is cleared to recover a valid state automatically.
       await this.clearSecrets();
       return null;
     }
@@ -59,6 +61,7 @@ export class SecureSecretsStorageService {
       throw new Error('Config non valida.');
     }
 
+    // Reuse per-browser key when available so data remains decryptable across sessions.
     const cryptoKey = await this.getOrCreateKey();
 
     const plaintext = JSON.stringify(sanitizedSecrets);
@@ -111,6 +114,7 @@ export class SecureSecretsStorageService {
   }
 
   private async openDatabase(): Promise<IDBDatabase> {
+    // Small dedicated store avoids coupling secrets lifecycle with app data stores.
     return new Promise((resolve, reject) => {
       const openRequest = indexedDB.open(DB_NAME, DB_VERSION);
 

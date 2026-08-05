@@ -214,50 +214,7 @@
       </section>
 
       <section class="result-panel" aria-live="polite">
-        <header class="result-header">
-          <h2>Anteprima parsing</h2>
-          <p>Sorgente: {{ parsed.source === 'pdf' ? 'Testo PDF' : 'OCR Tesseract.js' }}</p>
-        </header>
-
-        <dl class="totals-grid">
-          <div>
-            <dt>Prodotti riconosciuti</dt>
-            <dd>{{ parsed.items.length }}</dd>
-          </div>
-          <div>
-            <dt>Subtotale</dt>
-            <dd>{{ formatMoney(parsed.subtotal) }}</dd>
-          </div>
-          <div>
-            <dt>Totale</dt>
-            <dd>{{ formatMoney(parsed.total) }}</dd>
-          </div>
-        </dl>
-
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Prodotto</th>
-                <th>Prezzo unit.</th>
-                <th>Qta</th>
-                <th>Sconto</th>
-                <th>Totale scontato</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of parsed.items; track item.rawName + '-' + $index) {
-                <tr>
-                  <td>{{ item.name }}</td>
-                  <td>{{ formatMoney(item.unitPrice) }}</td>
-                  <td>{{ item.quantity }}</td>
-                  <td>{{ item.discountTotal > 0 ? formatMoney(item.discountTotal) : '-' }}</td>
-                  <td>{{ formatMoney(item.totalPrice - item.discountTotal) }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <app-receipt-parsing-preview [preview]="toParsingPreviewModel(parsed)"></app-receipt-parsing-preview>
       </section>
     </div>
 

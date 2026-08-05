@@ -1,0 +1,61 @@
+.result-header h2,
+.result-header p {
+  margin: 0;
+}
+
+.result-header {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.totals-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+
+.totals-grid div {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(200, 223, 255, 0.25);
+  background: rgba(9, 20, 39, 0.32);
+}
+
+.totals-grid dt {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-1);
+}
+
+.totals-grid dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.16rem;
+  font-weight: 700;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 0.55rem;
+}
+
+th {
+  font-size: 0.83rem;
+  color: var(--ink-1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}

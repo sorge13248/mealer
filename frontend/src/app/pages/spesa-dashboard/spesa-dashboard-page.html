@@ -16,7 +16,7 @@
       <label class="control-label" for="period-days">Periodo analisi</label>
       <select id="period-days" class="control-select" [value]="selectedPeriodDays()" (change)="onPeriodChange($event)">
         @for (option of periodOptions; track option) {
-          <option [value]="option">Ultimi {{ option }} giorni</option>
+          <option [value]="option" [selected]="selectedPeriodDays() === option">Ultimi {{ option }} giorni</option>
         }
       </select>
     </div>
@@ -79,8 +79,106 @@
       </article>
       <article class="kpi-card">
         <h2>Periodo</h2>
-        <p>{{ data.periodDays }} giorni</p>
+        <p>{{ selectedPeriodDays() }} giorni</p>
       </article>
+    </section>
+
+    <section class="panel" aria-label="Scontrini caricati">
+      <header class="panel-header receipts-panel-header">
+        <div>
+          <h2>Scontrini caricati</h2>
+          <p>Storico consultabile con paginazione e dettaglio prodotti.</p>
+        </div>
+        <button
+          type="button"
+          class="ghost-action"
+          (click)="refreshStoredReceipts()"
+          [disabled]="isLoadingStoredReceipts()"
+        >
+          Aggiorna elenco
+        </button>
+      </header>
+
+      @if (isLoadingStoredReceipts()) {
+        <p class="status-message">Caricamento scontrini...</p>
+      } @else if (storedReceiptsErrorMessage()) {
+        <p class="status-message status-message-error">{{ storedReceiptsErrorMessage() }}</p>
+      } @else if (storedReceipts().length === 0) {
+        <p class="status-message">Nessuno scontrino salvato.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="receipts-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Data acquisto</th>
+                <th>Negozio</th>
+                <th>Sorgente</th>
+                <th>Righe</th>
+                <th>Totale</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (receipt of storedReceipts(); track receipt.id; let index = $index) {
+                <tr>
+                  <td>{{ toReceiptOrdinal(index) }}</td>
+                  <td>{{ formatDate(receipt.purchasedAt) }}</td>
+                  <td>{{ receipt.storeName }}</td>
+                  <td>{{ receipt.source === 'pdf' ? 'PDF' : 'OCR' }}</td>
+                  <td>{{ receipt.itemCount }}</td>
+                  <td>{{ formatMoney(receipt.total) }}</td>
+                  <td>
+                    <div class="receipts-row-actions">
+                      <button
+                        type="button"
+                        class="ghost-action"
+                        (click)="openReceiptDetail(receipt)"
+                      >
+                        Dettaglio
+                      </button>
+                      <button
+                        type="button"
+                        class="delete-action"
+                        (click)="deleteReceipt(receipt)"
+                        [disabled]="isDeletingReceipt(receipt.id)"
+                      >
+                        {{ isDeletingReceipt(receipt.id) ? 'Eliminazione...' : 'Elimina' }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <footer class="receipts-pagination">
+          <button
+            type="button"
+            class="ghost-action"
+            (click)="goToPreviousReceiptsPage()"
+            [disabled]="receiptsPage() <= 1 || isLoadingStoredReceipts()"
+          >
+            Pagina precedente
+          </button>
+          <p>
+            Pagina {{ receiptsPage() }} di {{ receiptsTotalPages() }} - Totale scontrini: {{ receiptsTotalItems() }}
+          </p>
+          <button
+            type="button"
+            class="ghost-action"
+            (click)="goToNextReceiptsPage()"
+            [disabled]="receiptsPage() >= receiptsTotalPages() || isLoadingStoredReceipts()"
+          >
+            Pagina successiva
+          </button>
+        </footer>
+      }
+
+      @if (receiptActionMessage()) {
+        <p class="status-message">{{ receiptActionMessage() }}</p>
+      }
     </section>
 
     <section class="panel" aria-label="Andamento costo spesa mensile">
@@ -204,6 +302,76 @@
           }
         </div>
       }
+    </section>
+  }
+
+  @if (activeReceiptSummary()) {
+    <div class="modal-backdrop" (click)="closeReceiptDetailModal()" aria-hidden="true"></div>
+    <section class="product-filter-modal" role="dialog" aria-modal="true" aria-label="Dettaglio scontrino">
+      <header class="product-filter-header">
+        <h2>Dettaglio scontrino #{{ activeReceiptSummary()?.id }}</h2>
+        <p>
+          {{ activeReceiptSummary()?.storeName }} - {{ formatDate(activeReceiptSummary()?.purchasedAt ?? '') }}
+          - Totale {{ formatMoney(activeReceiptSummary()?.total ?? null) }}
+        </p>
+      </header>
+
+      @if (isLoadingReceiptDetail()) {
+        <p class="status-message">Caricamento dettaglio scontrino...</p>
+      } @else if (receiptDetailErrorMessage()) {
+        <p class="status-message status-message-error">{{ receiptDetailErrorMessage() }}</p>
+      } @else if (activeReceiptDetail(); as receiptDetail) {
+        <app-receipt-parsing-preview
+          title="Anteprima parsing (salvato)"
+          [preview]="toStoredReceiptPreview(receiptDetail)"
+        ></app-receipt-parsing-preview>
+
+        <section class="stored-products-panel" aria-label="Prodotti salvati e mapping Grocy">
+          <header class="panel-header">
+            <h3>Prodotti e mapping Grocy</h3>
+          </header>
+
+          <div class="table-scroll">
+            <table class="receipts-table">
+              <thead>
+                <tr>
+                  <th>Prodotto scontrino</th>
+                  <th>Prodotto Grocy</th>
+                  <th>Qta</th>
+                  <th>Prezzo unit.</th>
+                  <th>Totale scontato</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of receiptDetail.items; track item.id) {
+                  <tr>
+                    <td>{{ item.receiptName }}</td>
+                    <td>
+                      <a
+                        class="product-link"
+                        [href]="getGrocyProductUrl(item.grocyProductId)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {{ item.grocyProductName }}
+                      </a>
+                    </td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ formatMoney(item.unitPrice) }}</td>
+                    <td>{{ formatMoney(item.lineTotalDiscounted) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      <footer class="product-filter-footer">
+        <div class="product-filter-actions">
+          <button type="button" class="modal-cancel-button" (click)="closeReceiptDetailModal()">Chiudi</button>
+        </div>
+      </footer>
     </section>
   }
 

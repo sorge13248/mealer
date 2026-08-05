@@ -25,6 +25,23 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## OCR self-hosted (Sprint 1)
+
+Il backend supporta una catena OCR locale a provider multipli, senza API cloud a pagamento.
+
+- Provider orchestrator: `ReceiptOcrEngineService`
+- Provider 1 (preferito): microservizio HTTP locale (`selfhosted-http`)
+- Provider 2 (fallback): `tesseract` interno al backend
+
+Variabili ambiente OCR:
+
+- `OCR_PROVIDER_ORDER` (default: `selfhosted-http,tesseract`)
+- `OCR_HTTP_ENABLED` (default: `true`)
+- `OCR_HTTP_URL` (default: `http://mealer-ocr:8000/ocr/receipt/base64`)
+- `OCR_HTTP_TIMEOUT_MS` (default: `45000`)
+
+Per i PDF scansionati, il parser Adobe prova prima il render pagine via `pdftoppm` (DPI alto), poi il fallback su immagini embedded nel PDF.
+
 ## Project setup
 
 ```bash

@@ -1,14 +1,15 @@
 import {
   BadRequestException,
   Injectable,
-  OnModuleDestroy,
+  Logger,
+  NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { createHash } from 'node:crypto';
-import { createWorker } from 'tesseract.js';
 import { DataSource, QueryRunner } from 'typeorm';
 import { GrocyService } from '../grocy/grocy.service';
+import { ReceiptParserDispatcherService } from './receipt-parsers/receipt-parser-dispatcher.service';
 
 const RECEIPT_ITEM_REGEX =
   /^(?<name>.+?)\s+(?<vatRate>\d{1,2}[.,]\d{1,2})\s*%\s+(?<price>-?\d+[.,]\d{2})$/;
@@ -173,18 +174,50 @@ export interface ShoppingInsightsResponse {
   selectedProductsTrend: ShoppingInsightsProductTrend[];
 }
 
-interface OcrWorker {
-  recognize(image: Buffer): Promise<{ data: { text: string } }>;
-  setParameters(parameters: Record<string, string | number>): Promise<void>;
-  terminate(): Promise<void>;
+export interface StoredReceiptListItem {
+  id: number;
+  storeName: string;
+  storeKey: string;
+  purchasedAt: string;
+  source: 'pdf' | 'ocr';
+  fileName: string | null;
+  subtotal: number | null;
+  total: number | null;
+  itemCount: number;
+  createdAt: string;
 }
 
-interface PdfParseResult {
-  text?: string;
+export interface StoredReceiptListResponse {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  items: StoredReceiptListItem[];
 }
 
-interface PdfParseModule {
-  default: (input: Buffer) => Promise<PdfParseResult>;
+export interface StoredReceiptDetailItem {
+  id: number;
+  receiptProductId: number;
+  receiptName: string;
+  grocyProductId: number;
+  grocyProductName: string;
+  quantity: number;
+  unitPrice: number;
+  discountTotal: number;
+  lineTotalDiscounted: number;
+  vatRate: number;
+  createdAt: string;
+}
+
+export interface StoredReceiptDetailResponse {
+  receipt: StoredReceiptListItem;
+  items: StoredReceiptDetailItem[];
+}
+
+export interface DeleteStoredReceiptResponse {
+  receiptId: number;
+  deletedReceipt: boolean;
+  deletedItemsCount: number;
 }
 
 interface GrocyProductLite {
@@ -263,19 +296,55 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.86;
 const DEFAULT_INSIGHTS_PERIOD_DAYS = 180;
 const MAX_INSIGHTS_PERIOD_DAYS = 730;
 const TOP_PRODUCTS_LIMIT = 8;
+const DEFAULT_RECEIPTS_PAGE = 1;
+const DEFAULT_RECEIPTS_PAGE_SIZE = 10;
+const MAX_RECEIPTS_PAGE_SIZE = 50;
+const KNOWN_STORE_PATTERNS: Array<{
+  canonicalName: string;
+  aliases: string[];
+}> = [
+  {
+    canonicalName: 'COOP ALLEANZA 3.0',
+    aliases: [
+      'COOP ALLEANZA 3.0',
+      'COOP ALLEANZA',
+      'ALLEANZA 3.0',
+      'COOP',
+      'SUPERMERCATO PADOVA PACE',
+      'PADOVA PACE',
+    ],
+  },
+  {
+    canonicalName: 'ALIPER DI ABANO',
+    aliases: [
+      'ALIPER DI ABANO',
+      'ALIPER ABANO',
+      'ALIPER',
+      'ALI PER',
+      'ALI',
+      'ALI SPA',
+      'ALI S P A',
+      'ABANO TERME',
+    ],
+  },
+];
+const KNOWN_STORE_VAT_TO_NAME: Record<string, string> = {
+  '03503411203': 'COOP ALLEANZA 3.0',
+  '00348980285': 'ALIPER DI ABANO',
+};
 
 @Injectable()
-export class SpesaService implements OnModuleInit, OnModuleDestroy {
-  private ocrWorker: OcrWorker | null = null;
-  private ocrWorkerSetupPromise: Promise<OcrWorker> | null = null;
-  private ocrQueue: Promise<void> = Promise.resolve();
+export class SpesaService implements OnModuleInit {
+  private readonly logger = new Logger(SpesaService.name);
 
   constructor(
     private readonly grocyService: GrocyService,
+    private readonly receiptParserDispatcher: ReceiptParserDispatcherService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
 
+  // Bootstraps and migrates local SQLite structures used by receipt ingestion.
   async onModuleInit(): Promise<void> {
     await this.dataSource.query(`PRAGMA foreign_keys = ON`);
 
@@ -329,7 +398,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS normalized_receipts (
+      CREATE TABLE IF NOT EXISTS spesa_receipts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         store_id INTEGER NOT NULL,
         purchased_at TEXT NOT NULL,
@@ -345,12 +414,12 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.dataSource.query(`
-      CREATE INDEX IF NOT EXISTS idx_normalized_receipts_store_date
-      ON normalized_receipts(store_id, purchased_at)
+      CREATE INDEX IF NOT EXISTS idx_spesa_receipts_store_date
+      ON spesa_receipts(store_id, purchased_at)
     `);
 
     await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS normalized_receipt_items (
+      CREATE TABLE IF NOT EXISTS spesa_receipt_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         receipt_id INTEGER NOT NULL,
         receipt_product_id INTEGER NOT NULL,
@@ -361,120 +430,25 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         line_total_discounted REAL NOT NULL,
         vat_rate REAL NOT NULL,
         created_at TEXT NOT NULL,
-        FOREIGN KEY (receipt_id) REFERENCES normalized_receipts(id),
+        FOREIGN KEY (receipt_id) REFERENCES spesa_receipts(id),
         FOREIGN KEY (receipt_product_id) REFERENCES receipt_products(id),
         FOREIGN KEY (grocy_product_id) REFERENCES grocy_products(id)
       )
     `);
 
     await this.dataSource.query(`
-      CREATE INDEX IF NOT EXISTS idx_normalized_receipt_items_receipt
-      ON normalized_receipt_items(receipt_id)
+      CREATE INDEX IF NOT EXISTS idx_spesa_receipt_items_receipt
+      ON spesa_receipt_items(receipt_id)
     `);
 
     await this.dataSource.query(`
-      CREATE INDEX IF NOT EXISTS idx_normalized_receipt_items_product
-      ON normalized_receipt_items(grocy_product_id)
+      CREATE INDEX IF NOT EXISTS idx_spesa_receipt_items_product
+      ON spesa_receipt_items(grocy_product_id)
     `);
 
-    // Legacy tables are kept for backward compatibility and data migration only.
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS receipt_product_mapping (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        store_key TEXT NOT NULL,
-        store_name TEXT NOT NULL,
-        receipt_name_raw TEXT NOT NULL,
-        receipt_name_normalized TEXT NOT NULL,
-        grocy_product_id INTEGER NOT NULL,
-        grocy_product_name_snapshot TEXT NOT NULL,
-        confidence REAL NOT NULL DEFAULT 1,
-        usage_count INTEGER NOT NULL DEFAULT 0,
-        last_used_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `);
-
-    await this.dataSource.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_product_mapping_store_name_norm
-      ON receipt_product_mapping(store_key, receipt_name_normalized)
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS receipts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        store_key TEXT NOT NULL,
-        store_name TEXT NOT NULL,
-        purchased_at TEXT NOT NULL,
-        source TEXT,
-        file_name TEXT,
-        subtotal REAL,
-        total REAL,
-        raw_text TEXT,
-        fingerprint TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `);
-
-    await this.dataSource.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_receipts_fingerprint
-      ON receipts(fingerprint)
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS receipt_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        receipt_id INTEGER NOT NULL,
-        store_key TEXT NOT NULL,
-        receipt_product_name TEXT NOT NULL,
-        receipt_product_name_normalized TEXT NOT NULL,
-        grocy_product_id INTEGER NOT NULL,
-        grocy_product_name_snapshot TEXT NOT NULL,
-        quantity REAL NOT NULL,
-        unit_price REAL NOT NULL,
-        discount_total REAL NOT NULL,
-        line_total_discounted REAL NOT NULL,
-        vat_rate REAL NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `);
-
-    await this.dataSource.query(`
-      CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id
-      ON receipt_items(receipt_id)
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS product_price_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        receipt_id INTEGER NOT NULL,
-        grocy_product_id INTEGER NOT NULL,
-        store_key TEXT NOT NULL,
-        observed_at TEXT NOT NULL,
-        unit_price REAL NOT NULL,
-        quantity REAL NOT NULL,
-        line_total_discounted REAL NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `);
-
-    await this.dataSource.query(`
-      CREATE INDEX IF NOT EXISTS idx_price_history_product_store_date
-      ON product_price_history(grocy_product_id, store_key, observed_at)
-    `);
-
-    await this.migrateLegacySpesaTablesToNormalizedSchema();
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    if (!this.ocrWorker) {
-      return;
-    }
-
-    await this.ocrWorker.terminate();
-    this.ocrWorker = null;
-    this.ocrWorkerSetupPromise = null;
-    this.ocrQueue = Promise.resolve();
+    await this.migrateLegacySpesaData();
+    await this.dropLegacySpesaTables();
+    await this.ensureSpesaReceiptItemsCascadeDelete();
   }
 
   async parseReceiptFile(
@@ -496,10 +470,16 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const rawText = isPdf
-      ? await this.extractTextFromPdf(file.buffer)
-      : await this.extractTextWithOcr(file.buffer);
-    const items = this.extractItemsFromReceiptText(rawText);
+    // OCR/PDF selection is delegated to specialized parsers via dispatcher.
+    const dispatchResult = await this.receiptParserDispatcher.parse(file);
+    this.logger.log(
+      `parse.dispatch file=${file.originalname} kind=${dispatchResult.kind} source=${dispatchResult.source} rawTextLen=${dispatchResult.rawText.length}`,
+    );
+
+    const rawText = dispatchResult.rawText;
+    const items = this.aggregatePreviewItems(
+      this.extractItemsFromReceiptText(rawText),
+    );
     const storeName = this.extractStoreName(rawText);
     const storeKey = this.normalizeStoreKey(storeName);
     const subtotal = this.extractTotalValue(
@@ -516,10 +496,14 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       rawText,
     });
 
+    this.logger.log(
+      `parse.summary file=${file.originalname} store=${storeKey} items=${items.length} subtotal=${subtotal ?? 'null'} total=${total ?? 'null'} duplicate=${existingReceiptId !== null}`,
+    );
+
     return {
       fileName: file.originalname,
       mimeType: file.mimetype,
-      source: isPdf ? 'pdf' : 'ocr',
+      source: dispatchResult.source,
       storeName,
       storeKey,
       items,
@@ -559,6 +543,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     const results: MatchCandidatesResponseItem[] = [];
 
     for (const [receiptNameNormalized, receiptName] of deduplicatedItems) {
+      // Prefer previously approved mappings to minimize repeated manual matching.
       const storedMapping = await this.findStoredMapping(
         storeKey,
         receiptNameNormalized,
@@ -622,6 +607,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     let savedCount = 0;
 
     for (const mapping of mappings) {
+      // Save canonicalized receipt-side names and bind them to Grocy products per store.
       const receiptNameRaw = (mapping.receiptName ?? '').trim();
       const receiptNameNormalized = this.normalizeForMatching(receiptNameRaw);
       const grocyProductId = Number(mapping.grocyProductId);
@@ -697,6 +683,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       rawText,
     });
 
+    // Normalize and validate payload rows before touching the database.
     const normalizedItems = items
       .map((item) => {
         const receiptName = (item.receiptName ?? '').trim();
@@ -743,6 +730,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Nessuna riga valida da salvare.');
     }
 
+    // Persist receipt + items atomically to avoid partially imported receipts.
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -755,7 +743,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       );
 
       const existingRows = (await queryRunner.query(
-        `SELECT id FROM normalized_receipts WHERE fingerprint = ? LIMIT 1`,
+        `SELECT id FROM spesa_receipts WHERE fingerprint = ? LIMIT 1`,
         [fingerprint],
       )) as ExistingReceiptRow[];
 
@@ -771,7 +759,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
       await queryRunner.query(
         `
-          INSERT INTO normalized_receipts (
+          INSERT INTO spesa_receipts (
             store_id,
             purchased_at,
             source,
@@ -822,7 +810,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
         await queryRunner.query(
           `
-            INSERT INTO normalized_receipt_items (
+            INSERT INTO spesa_receipt_items (
               receipt_id,
               receipt_product_id,
               grocy_product_id,
@@ -864,10 +852,244 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async getStoredReceipts(input: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<StoredReceiptListResponse> {
+    const page = this.normalizeReceiptsPage(input.page);
+    const pageSize = this.normalizeReceiptsPageSize(input.pageSize);
+    const offset = (page - 1) * pageSize;
+
+    const totalRows = await this.queryRows<{ total_items: number | string }>(
+      `SELECT COUNT(*) as total_items FROM spesa_receipts`,
+      [],
+    );
+    const totalItems = Number(totalRows[0]?.total_items ?? 0);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+    const rows = await this.queryRows<{
+      id: number | string;
+      store_name: string | null;
+      store_key: string | null;
+      purchased_at: string;
+      source: string | null;
+      file_name: string | null;
+      subtotal: number | string | null;
+      total: number | string | null;
+      item_count: number | string;
+      created_at: string;
+    }>(
+      `
+        SELECT
+          r.id,
+          s.store_name,
+          s.store_key,
+          r.purchased_at,
+          r.source,
+          r.file_name,
+          r.subtotal,
+          r.total,
+          COUNT(ri.id) as item_count,
+          r.created_at
+        FROM spesa_receipts r
+        INNER JOIN stores s ON s.id = r.store_id
+        LEFT JOIN spesa_receipt_items ri ON ri.receipt_id = r.id
+        GROUP BY r.id
+        ORDER BY r.purchased_at DESC, r.id DESC
+        LIMIT ? OFFSET ?
+      `,
+      [pageSize, offset],
+    );
+
+    return {
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
+      items: rows.map((row) => ({
+        id: Number(row.id) || 0,
+        storeName: (row.store_name ?? '').trim() || DEFAULT_STORE_NAME,
+        storeKey: (row.store_key ?? '').trim() || DEFAULT_STORE_KEY,
+        purchasedAt: row.purchased_at,
+        source: row.source === 'ocr' ? 'ocr' : 'pdf',
+        fileName: row.file_name,
+        subtotal:
+          row.subtotal === null
+            ? null
+            : this.roundMoney(Number(row.subtotal) || 0),
+        total:
+          row.total === null ? null : this.roundMoney(Number(row.total) || 0),
+        itemCount: Number(row.item_count) || 0,
+        createdAt: row.created_at,
+      })),
+    };
+  }
+
+  async getStoredReceiptDetail(
+    receiptId: number,
+  ): Promise<StoredReceiptDetailResponse> {
+    const normalizedReceiptId = this.normalizeReceiptId(receiptId);
+
+    const receiptRows = await this.queryRows<{
+      id: number | string;
+      store_name: string | null;
+      store_key: string | null;
+      purchased_at: string;
+      source: string | null;
+      file_name: string | null;
+      subtotal: number | string | null;
+      total: number | string | null;
+      item_count: number | string;
+      created_at: string;
+    }>(
+      `
+        SELECT
+          r.id,
+          s.store_name,
+          s.store_key,
+          r.purchased_at,
+          r.source,
+          r.file_name,
+          r.subtotal,
+          r.total,
+          COUNT(ri.id) as item_count,
+          r.created_at
+        FROM spesa_receipts r
+        INNER JOIN stores s ON s.id = r.store_id
+        LEFT JOIN spesa_receipt_items ri ON ri.receipt_id = r.id
+        WHERE r.id = ?
+        GROUP BY r.id
+        LIMIT 1
+      `,
+      [normalizedReceiptId],
+    );
+
+    const receipt = receiptRows[0];
+    if (!receipt) {
+      throw new NotFoundException('Scontrino non trovato.');
+    }
+
+    const itemRows = await this.queryRows<{
+      id: number | string;
+      receipt_product_id: number | string;
+      receipt_name: string | null;
+      grocy_product_id: number | string;
+      grocy_product_name: string | null;
+      quantity: number | string | null;
+      unit_price: number | string | null;
+      discount_total: number | string | null;
+      line_total_discounted: number | string | null;
+      vat_rate: number | string | null;
+      created_at: string;
+    }>(
+      `
+        SELECT
+          ri.id,
+          ri.receipt_product_id,
+          rp.receipt_name_raw as receipt_name,
+          ri.grocy_product_id,
+          COALESCE(gp.name_snapshot, 'Prodotto #' || ri.grocy_product_id) as grocy_product_name,
+          ri.quantity,
+          ri.unit_price,
+          ri.discount_total,
+          ri.line_total_discounted,
+          ri.vat_rate,
+          ri.created_at
+        FROM spesa_receipt_items ri
+        INNER JOIN receipt_products rp ON rp.id = ri.receipt_product_id
+        LEFT JOIN grocy_products gp ON gp.id = ri.grocy_product_id
+        WHERE ri.receipt_id = ?
+        ORDER BY ri.id ASC
+      `,
+      [normalizedReceiptId],
+    );
+
+    return {
+      receipt: {
+        id: Number(receipt.id) || 0,
+        storeName: (receipt.store_name ?? '').trim() || DEFAULT_STORE_NAME,
+        storeKey: (receipt.store_key ?? '').trim() || DEFAULT_STORE_KEY,
+        purchasedAt: receipt.purchased_at,
+        source: receipt.source === 'ocr' ? 'ocr' : 'pdf',
+        fileName: receipt.file_name,
+        subtotal:
+          receipt.subtotal === null
+            ? null
+            : this.roundMoney(Number(receipt.subtotal) || 0),
+        total:
+          receipt.total === null
+            ? null
+            : this.roundMoney(Number(receipt.total) || 0),
+        itemCount: Number(receipt.item_count) || 0,
+        createdAt: receipt.created_at,
+      },
+      items: itemRows.map((row) => ({
+        id: Number(row.id) || 0,
+        receiptProductId: Number(row.receipt_product_id) || 0,
+        receiptName: (row.receipt_name ?? '').trim(),
+        grocyProductId: Number(row.grocy_product_id) || 0,
+        grocyProductName:
+          (row.grocy_product_name ?? '').trim() ||
+          `Prodotto #${String(row.grocy_product_id)}`,
+        quantity: this.roundMoney(Number(row.quantity) || 0),
+        unitPrice: this.roundMoney(Number(row.unit_price) || 0),
+        discountTotal: this.roundMoney(Number(row.discount_total) || 0),
+        lineTotalDiscounted: this.roundMoney(
+          Number(row.line_total_discounted) || 0,
+        ),
+        vatRate: this.roundMoney(Number(row.vat_rate) || 0),
+        createdAt: row.created_at,
+      })),
+    };
+  }
+
+  async deleteStoredReceipt(
+    receiptId: number,
+  ): Promise<DeleteStoredReceiptResponse> {
+    const normalizedReceiptId = this.normalizeReceiptId(receiptId);
+
+    const existingRows = await this.queryRows<ExistingReceiptRow>(
+      `SELECT id FROM spesa_receipts WHERE id = ? LIMIT 1`,
+      [normalizedReceiptId],
+    );
+    if (!existingRows[0]) {
+      throw new NotFoundException('Scontrino non trovato.');
+    }
+
+    const itemsCountRows = await this.queryRows<{
+      total_items: number | string;
+    }>(
+      `SELECT COUNT(*) as total_items FROM spesa_receipt_items WHERE receipt_id = ?`,
+      [normalizedReceiptId],
+    );
+    const deletedItemsCount = Number(itemsCountRows[0]?.total_items ?? 0);
+
+    await this.dataSource.query(`DELETE FROM spesa_receipts WHERE id = ?`, [
+      normalizedReceiptId,
+    ]);
+
+    const changesRows = await this.queryRows<{ count: number | string }>(
+      `SELECT changes() as count`,
+      [],
+    );
+    const deletedReceipt = Number(changesRows[0]?.count ?? 0) > 0;
+
+    if (!deletedReceipt) {
+      throw new NotFoundException('Scontrino non trovato.');
+    }
+
+    return {
+      receiptId: normalizedReceiptId,
+      deletedReceipt,
+      deletedItemsCount,
+    };
+  }
+
   async getShoppingInsights(input: {
     days?: number;
     productIds?: number[];
   }): Promise<ShoppingInsightsResponse> {
+    // Build dashboard aggregates from normalized receipts and item price points.
     const periodDays = this.normalizeInsightsPeriodDays(input.days);
     const selectedProductIds = Array.isArray(input.productIds)
       ? input.productIds.filter((value) => Number.isInteger(value) && value > 0)
@@ -886,7 +1108,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
           COUNT(*) as receipts_count,
           COALESCE(SUM(total), 0) as total_spent,
           COALESCE(AVG(total), 0) as average_receipt_total
-        FROM normalized_receipts
+        FROM spesa_receipts
         WHERE purchased_at >= ?
       `,
       [periodStart],
@@ -898,7 +1120,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         SELECT
           substr(purchased_at, 1, 7) as month,
           COALESCE(SUM(total), 0) as total_spent
-        FROM normalized_receipts
+        FROM spesa_receipts
         WHERE purchased_at >= ?
         GROUP BY substr(purchased_at, 1, 7)
         ORDER BY month ASC
@@ -913,7 +1135,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
           substr(purchased_at, 1, 7) as month,
           COUNT(*) as receipts_count,
           COALESCE(AVG(total), 0) as average_receipt_total
-        FROM normalized_receipts
+        FROM spesa_receipts
         WHERE purchased_at >= ?
         GROUP BY substr(purchased_at, 1, 7)
         ORDER BY month ASC
@@ -932,16 +1154,16 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
           COALESCE(MAX(ri.unit_price), 0) as max_unit_price,
           COALESCE((
             SELECT ri2.unit_price
-            FROM normalized_receipt_items ri2
-            INNER JOIN normalized_receipts r2 ON r2.id = ri2.receipt_id
+            FROM spesa_receipt_items ri2
+            INNER JOIN spesa_receipts r2 ON r2.id = ri2.receipt_id
             WHERE ri2.grocy_product_id = ri.grocy_product_id
               AND r2.purchased_at >= ?
             ORDER BY r2.purchased_at DESC, ri2.id DESC
             LIMIT 1
           ), 0) as last_unit_price,
           COUNT(*) as observations
-        FROM normalized_receipt_items ri
-        INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+        FROM spesa_receipt_items ri
+        INNER JOIN spesa_receipts r ON r.id = ri.receipt_id
         LEFT JOIN grocy_products gp ON gp.id = ri.grocy_product_id
         WHERE r.purchased_at >= ?
         GROUP BY ri.grocy_product_id
@@ -961,8 +1183,8 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       const medianRows = await this.queryRows<ProductMedianRow>(
         `
           SELECT grocy_product_id, unit_price
-          FROM normalized_receipt_items ri
-          INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+          FROM spesa_receipt_items ri
+          INNER JOIN spesa_receipts r ON r.id = ri.receipt_id
           WHERE r.purchased_at >= ?
             AND grocy_product_id IN (${placeholders})
           ORDER BY grocy_product_id ASC, unit_price ASC
@@ -1007,8 +1229,8 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
             ri.unit_price,
             ri.quantity,
             ri.line_total_discounted
-          FROM normalized_receipt_items ri
-          INNER JOIN normalized_receipts r ON r.id = ri.receipt_id
+          FROM spesa_receipt_items ri
+          INNER JOIN spesa_receipts r ON r.id = ri.receipt_id
           LEFT JOIN grocy_products gp ON gp.id = ri.grocy_product_id
           WHERE r.purchased_at >= ?
             AND ri.grocy_product_id IN (${placeholders})
@@ -1090,38 +1312,6 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async extractTextFromPdf(buffer: Buffer): Promise<string> {
-    const pdfModuleCandidate: unknown = await import('pdf-parse');
-    const pdfModule = pdfModuleCandidate as PdfParseModule;
-    const parsed = await pdfModule.default(buffer);
-    const text = typeof parsed.text === 'string' ? parsed.text.trim() : '';
-    if (!text) {
-      throw new BadRequestException(
-        'PDF senza testo leggibile. Prova con una foto dello scontrino.',
-      );
-    }
-
-    return text;
-  }
-
-  private async extractTextWithOcr(buffer: Buffer): Promise<string> {
-    return this.runOcrJob(async (worker) => {
-      const resultCandidate: unknown = await worker.recognize(buffer);
-      const result = resultCandidate as { data: { text: string } };
-
-      const normalizedText = result.data.text
-        .replace(/\u00a0/g, ' ')
-        .replace(/[\u200b-\u200d\ufeff]/g, '')
-        .trim();
-
-      if (!normalizedText) {
-        throw new BadRequestException('OCR non riuscito: testo non rilevato.');
-      }
-
-      return normalizedText;
-    });
-  }
-
   private extractItemsFromReceiptText(rawText: string): ParsedReceiptItem[] {
     const lines = rawText
       .split(/\r?\n/)
@@ -1130,34 +1320,56 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
     const items: ParsedReceiptItem[] = [];
     let inItemsSection = false;
+    let seenReceiptHeader = false;
     let previousItem: ParsedReceiptItem | null = null;
     let previousNormalizedLine: string | null = null;
+    const sectionLines: string[] = [];
 
+    // First pass: parse line-oriented receipts where product, VAT and price stay aligned.
     for (const line of lines) {
       const normalizedLine = line.replace(/\s+/g, ' ').trim();
+      const lineForParsing = this.normalizeOcrLineForParsing(normalizedLine);
 
-      if (/DESCRIZIONE\s+IVA\s+PREZZO/i.test(normalizedLine)) {
+      if (/DOCUMENTO|COMMERCIALE|VENDITA|PRESTAZIONE/i.test(normalizedLine)) {
+        seenReceiptHeader = true;
+      }
+
+      if (this.isLikelyItemsHeader(lineForParsing)) {
         inItemsSection = true;
         continue;
       }
 
       if (!inItemsSection) {
-        continue;
+        if (
+          seenReceiptHeader &&
+          this.isLikelyReceiptItemCandidate(lineForParsing)
+        ) {
+          inItemsSection = true;
+        } else {
+          continue;
+        }
       }
 
       if (
-        /^(SUBTOTALE|TOTALE\s+COMPLESSIVO|DI\s+CUI\s+IVA)/i.test(normalizedLine)
+        /^(SUBTOTALE|TOTALE\s+COMPLESSIVO|DI\s+CUI\s+IVA|IMP\.?\s*PAGATO|PAGAMENTO)/i.test(
+          lineForParsing,
+        )
       ) {
-        break;
-      }
-
-      const quantityMatch = normalizedLine.match(QUANTITY_HINT_REGEX);
-      if (quantityMatch?.groups) {
-        previousNormalizedLine = normalizedLine;
+        if (inItemsSection) {
+          break;
+        }
         continue;
       }
 
-      const parsedLine = this.parseReceiptItemLine(normalizedLine);
+      sectionLines.push(lineForParsing);
+
+      const quantityMatch = lineForParsing.match(QUANTITY_HINT_REGEX);
+      if (quantityMatch?.groups) {
+        previousNormalizedLine = lineForParsing;
+        continue;
+      }
+
+      const parsedLine = this.parseReceiptItemLine(lineForParsing);
       if (!parsedLine) {
         continue;
       }
@@ -1172,7 +1384,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
             previousItem.discountTotal + Math.abs(parsedPrice),
           );
         }
-        previousNormalizedLine = normalizedLine;
+        previousNormalizedLine = lineForParsing;
         continue;
       }
 
@@ -1197,8 +1409,14 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      const normalizedName = this.normalizeProductName(rawName);
+      if (!this.isLikelyProductName(rawName, normalizedName, true)) {
+        previousNormalizedLine = lineForParsing;
+        continue;
+      }
+
       const item: ParsedReceiptItem = {
-        name: this.normalizeProductName(rawName),
+        name: normalizedName,
         rawName,
         quantity,
         unitPrice,
@@ -1209,10 +1427,315 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
 
       items.push(item);
       previousItem = item;
-      previousNormalizedLine = normalizedLine;
+      previousNormalizedLine = lineForParsing;
+    }
+
+    // Second pass: fallback for OCR text with collapsed spacing/line breaks.
+    const sectionCompactItems = this.extractItemsFromCompactReceiptText(
+      sectionLines.join(' '),
+    );
+    const sectionPriceTokenCount = this.countLoosePriceTokens(
+      sectionLines.join(' '),
+    );
+
+    if (
+      sectionCompactItems.length > items.length &&
+      sectionCompactItems.length <= sectionPriceTokenCount + 2
+    ) {
+      return sectionCompactItems;
+    }
+
+    if (items.length === 0) {
+      return this.extractItemsFromCompactReceiptText(rawText);
     }
 
     return items;
+  }
+
+  private aggregatePreviewItems(
+    items: ParsedReceiptItem[],
+  ): ParsedReceiptItem[] {
+    if (items.length <= 1) {
+      return items;
+    }
+
+    const aggregated = new Map<string, ParsedReceiptItem>();
+    const order: string[] = [];
+
+    for (const item of items) {
+      const key = [
+        this.normalizeForMatching(item.name),
+        this.roundMoney(item.unitPrice).toFixed(2),
+        this.roundMoney(item.vatRate).toFixed(2),
+      ].join('|');
+
+      const existing = aggregated.get(key);
+      if (!existing) {
+        aggregated.set(key, {
+          ...item,
+          quantity: this.roundMoney(item.quantity),
+          totalPrice: this.roundMoney(item.totalPrice),
+          discountTotal: this.roundMoney(item.discountTotal),
+        });
+        order.push(key);
+        continue;
+      }
+
+      existing.quantity = this.roundMoney(existing.quantity + item.quantity);
+      existing.totalPrice = this.roundMoney(
+        existing.totalPrice + item.totalPrice,
+      );
+      existing.discountTotal = this.roundMoney(
+        existing.discountTotal + item.discountTotal,
+      );
+    }
+
+    return order
+      .map((key) => aggregated.get(key))
+      .filter((item): item is ParsedReceiptItem => item !== undefined);
+  }
+
+  private extractItemsFromCompactReceiptText(
+    rawText: string,
+  ): ParsedReceiptItem[] {
+    const compactText = this.normalizeOcrLineForParsing(
+      rawText.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim(),
+    );
+
+    if (!compactText) {
+      return [];
+    }
+
+    // Two staged regexes: strict first, then looser pattern for noisier OCR output.
+    const strictPattern =
+      /(?<name>[A-Z0-9 .,'/-]{3,}?)\s+(?:CF\s+)?(?<vatRate>\d{1,2}[.,]\d{1,2})\s*%?\s+(?<price>-?\d+[.,]\d{2})(?=\s+(?:[A-Z]|SUBTOTALE|TOTALE|PAGAMENTO|IMPORTO)|$)/gi;
+    const loosePattern =
+      /(?<name>[A-Z0-9 .,'/-]{3,90}?)\s+(?:(?:CF\s+)?(?<vatRate>\d{1,2}[.,]\d{1,2})\s*%?\s+)?(?<price>-?\d{3,5}|-?\d+[.,]\d{2})(?=\s+(?:[A-Z]{2,}|SUBTOTALE|TOTALE|PAGAMENTO|IMPORTO)|$)/gi;
+    const items: ParsedReceiptItem[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = strictPattern.exec(compactText)) !== null) {
+      const parsedItem = this.buildCompactParsedItem(match.groups ?? null);
+      if (!parsedItem) {
+        continue;
+      }
+
+      items.push(parsedItem);
+
+      if (items.length >= 120) {
+        break;
+      }
+    }
+
+    if (items.length > 0) {
+      return items;
+    }
+
+    while ((match = loosePattern.exec(compactText)) !== null) {
+      const parsedItem = this.buildCompactParsedItem(match.groups ?? null);
+      if (!parsedItem) {
+        continue;
+      }
+
+      items.push(parsedItem);
+
+      if (items.length >= 120) {
+        break;
+      }
+    }
+
+    if (items.length > 0) {
+      return items;
+    }
+
+    return this.extractItemsFromPriceAnchors(compactText);
+  }
+
+  private extractItemsFromPriceAnchors(
+    compactText: string,
+  ): ParsedReceiptItem[] {
+    // Last-resort heuristic: anchor on price tokens and backtrack a plausible name chunk.
+    const items: ParsedReceiptItem[] = [];
+    const stopWordsPattern =
+      /^(DOCUMENTO|DESCRIZIONE|P\.I\.?|VIA|TEL|PAGAMENTO|IMPORTO|SUBTOTALE|TOTALE|NR|CAP)$/i;
+    const pricePattern = /-?\d+[.,]\d{2}|-?\d{3,5}/g;
+    const priceMatches = [...compactText.matchAll(pricePattern)];
+
+    for (const match of priceMatches) {
+      const rawPrice = match[0] ?? '';
+      const parsedPrice = this.parseLooseMoneyValue(rawPrice);
+      if (!parsedPrice || parsedPrice <= 0 || parsedPrice > 999) {
+        continue;
+      }
+
+      const matchIndex = match.index ?? 0;
+      const leftWindowStart = Math.max(0, matchIndex - 96);
+      const leftWindow = compactText.slice(leftWindowStart, matchIndex).trim();
+      if (!leftWindow) {
+        continue;
+      }
+
+      const vatMatch = leftWindow.match(
+        /(?:CF\s*)?(?<vatRate>\d{1,2}[.,]\d{1,2})\s*%?\s*$/i,
+      );
+      const vatRate = vatMatch?.groups?.vatRate
+        ? this.parsePercentValue(vatMatch.groups.vatRate)
+        : 0;
+
+      const nameChunk = leftWindow
+        .replace(/(?:CF\s*)?\d{1,2}[.,]\d{1,2}\s*%?\s*$/i, '')
+        .trim();
+      const tokenCandidates = nameChunk
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .slice(-10);
+      const rawName = tokenCandidates.join(' ').trim();
+
+      if (!rawName || rawName.length < 3) {
+        continue;
+      }
+
+      if (stopWordsPattern.test(rawName)) {
+        continue;
+      }
+
+      const normalizedName = this.normalizeProductName(rawName);
+      if (!this.isLikelyProductName(rawName, normalizedName, false)) {
+        continue;
+      }
+
+      items.push({
+        name: normalizedName,
+        rawName,
+        quantity: 1,
+        unitPrice: parsedPrice,
+        totalPrice: parsedPrice,
+        vatRate,
+        discountTotal: 0,
+      });
+
+      if (items.length >= 120) {
+        break;
+      }
+    }
+
+    return items;
+  }
+
+  private buildCompactParsedItem(
+    groups: Record<string, string> | null,
+  ): ParsedReceiptItem | null {
+    if (!groups) {
+      return null;
+    }
+
+    const rawName = (groups.name ?? '').replace(/\s+/g, ' ').trim();
+    if (!rawName || rawName.length < 3) {
+      return null;
+    }
+
+    if (
+      /^(DOCUMENTO|DESCRIZIONE|P\.I\.?|VIA|TEL|PAGAMENTO|IMPORTO|SUBTOTALE|TOTALE)/i.test(
+        rawName,
+      )
+    ) {
+      return null;
+    }
+
+    const parsedPrice = this.parseLooseMoneyValue(groups.price ?? '');
+    if (!parsedPrice || parsedPrice <= 0 || parsedPrice > 999) {
+      return null;
+    }
+
+    const parsedVatRate = groups.vatRate
+      ? this.parsePercentValue(groups.vatRate)
+      : 0;
+    const normalizedName = this.normalizeProductName(rawName);
+    if (!this.isLikelyProductName(rawName, normalizedName, false)) {
+      return null;
+    }
+
+    return {
+      name: normalizedName,
+      rawName,
+      quantity: 1,
+      unitPrice: parsedPrice,
+      totalPrice: parsedPrice,
+      vatRate: parsedVatRate,
+      discountTotal: 0,
+    };
+  }
+
+  private parseLooseMoneyValue(rawValue: string): number | null {
+    const token = this.sanitizeNumericToken(rawValue)
+      .replace(/\s+/g, '')
+      .trim();
+    if (!token) {
+      return null;
+    }
+
+    if (/^-?\d+[.,]\d{2}$/.test(token)) {
+      return this.parseMoneyValue(token);
+    }
+
+    if (/^-?\d{3,5}$/.test(token)) {
+      const sign = token.startsWith('-') ? -1 : 1;
+      const digits = Number(token.replace('-', ''));
+      if (!Number.isFinite(digits)) {
+        return null;
+      }
+
+      return this.roundMoney((digits / 100) * sign);
+    }
+
+    return null;
+  }
+
+  private countLoosePriceTokens(text: string): number {
+    if (!text) {
+      return 0;
+    }
+
+    return (text.match(/-?\d+[.,]\d{2}|-?\d{3,5}/g) ?? []).length;
+  }
+
+  private isLikelyItemsHeader(normalizedLine: string): boolean {
+    return /DESCRIZ|DESCRIZIONE|IVA\s+PREZZO|PREZZO\s*\(?E\)?/i.test(
+      normalizedLine,
+    );
+  }
+
+  private isLikelyReceiptItemCandidate(normalizedLine: string): boolean {
+    const parsedLine = this.parseReceiptItemLine(normalizedLine);
+    if (!parsedLine) {
+      return false;
+    }
+
+    if (parsedLine.rawName.length < 3) {
+      return false;
+    }
+
+    if (
+      /^(TEL|P\.I\.?|VIA|CAP|DOCUMENTO|PAGAMENTO|IMPORTO)/i.test(
+        parsedLine.rawName,
+      )
+    ) {
+      return false;
+    }
+
+    return parsedLine.price > 0;
+  }
+
+  private normalizeOcrLineForParsing(line: string): string {
+    return line
+      .replace(/[€]/g, 'E')
+      .replace(/([0-9])[OQ](?=[0-9.,])/g, '$10')
+      .replace(/([0-9.,])[OQ](?=[0-9])/g, '$10')
+      .replace(/([0-9])[IL](?=[0-9.,])/g, '$11')
+      .replace(/([0-9.,])[IL](?=[0-9])/g, '$11')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private parseReceiptItemLine(normalizedLine: string): {
@@ -1220,6 +1743,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     price: number;
     vatRate: number;
   } | null {
+    // Prefer canonical "name + vat + price" rows, then fallback to trailing price extraction.
     const strictMatch = normalizedLine.match(RECEIPT_ITEM_REGEX);
     if (strictMatch?.groups) {
       const rawName = strictMatch.groups.name.trim();
@@ -1234,13 +1758,17 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     }
 
     const fallbackPriceMatch = normalizedLine.match(
-      /(?<price>-?\d+[.,]\d{2})\s*$/,
+      /(?<price>-?\d+[.,]\d{2}|-?\d{3,5})\s*$/,
     );
     if (!fallbackPriceMatch?.groups?.price) {
       return null;
     }
 
-    const price = this.parseMoneyValue(fallbackPriceMatch.groups.price);
+    const price = this.parseLooseMoneyValue(fallbackPriceMatch.groups.price);
+    if (!price || price <= 0 || price > 999) {
+      return null;
+    }
+
     const lineWithoutPrice = normalizedLine
       .slice(0, fallbackPriceMatch.index)
       .replace(/\s+/g, ' ')
@@ -1279,53 +1807,6 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       price,
       vatRate,
     };
-  }
-
-  private async runOcrJob<T>(
-    job: (worker: OcrWorker) => Promise<T>,
-  ): Promise<T> {
-    const previousQueue = this.ocrQueue;
-    let releaseQueue!: () => void;
-    this.ocrQueue = new Promise<void>((resolve) => {
-      releaseQueue = resolve;
-    });
-
-    await previousQueue;
-
-    try {
-      const worker = await this.getOrCreateOcrWorker();
-      return await job(worker);
-    } finally {
-      releaseQueue();
-    }
-  }
-
-  private async getOrCreateOcrWorker(): Promise<OcrWorker> {
-    if (this.ocrWorker) {
-      return this.ocrWorker;
-    }
-
-    if (!this.ocrWorkerSetupPromise) {
-      this.ocrWorkerSetupPromise = (async () => {
-        const workerCandidate: unknown = await createWorker('ita+eng');
-        const worker = workerCandidate as OcrWorker;
-
-        await worker.setParameters({
-          tessedit_pageseg_mode: 6,
-          preserve_interword_spaces: 1,
-        });
-
-        this.ocrWorker = worker;
-        return worker;
-      })();
-    }
-
-    try {
-      return await this.ocrWorkerSetupPromise;
-    } catch (error) {
-      this.ocrWorkerSetupPromise = null;
-      throw error;
-    }
   }
 
   private async loadGrocyProducts(): Promise<GrocyProductLite[]> {
@@ -1389,6 +1870,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     receiptNameNormalized: string,
     products: GrocyProductLite[],
   ): MatchCandidate[] {
+    // Compute ranked fuzzy candidates, then return only the top few actionable options.
     const receiptTokens = this.toTokenSet(receiptNameNormalized);
 
     const candidates = products
@@ -1424,6 +1906,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     rightName: string,
     rightTokens: Set<string>,
   ): number {
+    // Hybrid lexical score: token overlap + edit-distance similarity + containment bonus.
     if (!leftName || !rightName) {
       return 0;
     }
@@ -1497,12 +1980,36 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private extractStoreName(rawText: string): string {
+    // Resolve known stores first, then fallback to a robust header heuristic.
+    const knownStoreByVat = this.resolveKnownStoreNameByVat(rawText);
+    if (knownStoreByVat) {
+      return knownStoreByVat;
+    }
+
     const lines = rawText
       .split(/\r?\n/)
       .map((line) => line.replace(/\s+/g, ' ').trim())
       .filter(Boolean);
 
-    for (const line of lines.slice(0, 12)) {
+    const knownStoreName = this.resolveKnownStoreName(lines);
+    if (knownStoreName) {
+      return knownStoreName;
+    }
+
+    const fuzzyTokenStoreName = this.resolveKnownStoreNameByTokenHints(rawText);
+    if (fuzzyTokenStoreName) {
+      return fuzzyTokenStoreName;
+    }
+
+    const inferredStoreName = this.resolveStoreNameFromHeader(lines);
+    if (inferredStoreName) {
+      return inferredStoreName;
+    }
+
+    let bestLine = '';
+    let bestScore = -1;
+
+    for (const line of lines.slice(0, 14)) {
       const upper = line.toUpperCase();
       if (
         upper.startsWith('DOCUMENTO') ||
@@ -1515,12 +2022,326 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      if (/[A-Z]/i.test(line)) {
-        return line;
+      if (!/[A-Z]/i.test(line)) {
+        continue;
+      }
+
+      let score = 0;
+      if (!/\d/.test(line)) {
+        score += 2;
+      }
+      if (line.length >= 2 && line.length <= 26) {
+        score += 2;
+      }
+      if (line.split(' ').length <= 4) {
+        score += 1;
+      }
+      if (
+        /ALI|ALIPER|IPER|SUPERMERCAT|MARKET|COOP|LIDL|EUROSPIN/i.test(upper)
+      ) {
+        score += 3;
+      }
+      if (/S\.P\.A|S\.R\.L|SRL|SPA/.test(upper)) {
+        score -= 2;
+      }
+      if (line.length > 42) {
+        score -= 3;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestLine = line;
       }
     }
 
+    if (bestLine) {
+      return bestLine;
+    }
+
     return DEFAULT_STORE_NAME;
+  }
+
+  private resolveStoreNameFromHeader(lines: string[]): string | null {
+    const headerCandidates: string[] = [];
+
+    // Focus on the top section before item/payment details start.
+    for (const line of lines.slice(0, 36)) {
+      const upper = line.toUpperCase();
+
+      if (
+        /^(DOCUMENTO|DESCRIZIONE|SUBTOTALE|TOTALE|PAGAMENTO|IMPORTO|ART\b|TRANSAZIONE\b|NR\.\s*CARTA)/.test(
+          upper,
+        )
+      ) {
+        break;
+      }
+
+      headerCandidates.push(line);
+    }
+
+    let bestLine = '';
+    let bestScore = -100;
+
+    for (const line of headerCandidates) {
+      const score = this.scoreStoreHeaderLine(line);
+      if (score > bestScore) {
+        bestScore = score;
+        bestLine = line;
+      }
+    }
+
+    if (!bestLine || bestScore < 3) {
+      return null;
+    }
+
+    // Trim frequent legal suffixes that add noise to store keys while keeping brand name.
+    return bestLine
+      .replace(/\bSOC\.?\s*COOP\.?\b/gi, '')
+      .replace(/\bS\.?R\.?L\.?\b/gi, '')
+      .replace(/\bS\.?P\.?A\.?\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  private scoreStoreHeaderLine(line: string): number {
+    const upper = line.toUpperCase();
+
+    if (!/[A-Z]/i.test(line)) {
+      return -20;
+    }
+
+    if (line.length < 3) {
+      return -20;
+    }
+
+    if (
+      /^(P\.?I\.?|C\.?F\.?|VIA\b|V\.?LE\b|PIAZZA\b|CORSO\b|TEL\b|CAP\b|DATA\b|ORA\b|RT\b|PUNTO\s+CASSA\b|AUT\.?\b|ID\s*TR\b|A\.?I\.?I\.?C\.?\b)/.test(
+        upper,
+      )
+    ) {
+      return -25;
+    }
+
+    let score = 0;
+
+    if (!/\d/.test(line)) {
+      score += 3;
+    }
+
+    if (line.length >= 4 && line.length <= 42) {
+      score += 3;
+    }
+
+    if (line.split(' ').length <= 6) {
+      score += 1;
+    }
+
+    if (/[A-Z]{3,}/.test(upper)) {
+      score += 2;
+    }
+
+    if (
+      /COOP|CONAD|LIDL|EUROSPIN|CARREFOUR|IPER|ALI|ALIPER|DESPAR|MD\b|PAM|SUPERMERCAT|MARKET|FAMILA|PENNY/i.test(
+        upper,
+      )
+    ) {
+      score += 4;
+    }
+
+    if (/S\.P\.A|S\.R\.L|SOC\.\s*COOP/.test(upper)) {
+      score += 1;
+    }
+
+    if (line.length > 52) {
+      score -= 4;
+    }
+
+    return score;
+  }
+
+  private resolveKnownStoreNameByVat(rawText: string): string | null {
+    const digitsOnly = rawText.replace(/\D/g, '');
+
+    // Pass 1: exact VAT hit across all known stores (most reliable and deterministic).
+    for (const [vat, storeName] of Object.entries(KNOWN_STORE_VAT_TO_NAME)) {
+      if (digitsOnly.includes(vat)) {
+        return storeName;
+      }
+    }
+
+    // Pass 2: approximate VAT match as fallback for noisy OCR digits.
+    for (const [vat, storeName] of Object.entries(KNOWN_STORE_VAT_TO_NAME)) {
+      if (this.containsApproximateDigitSequence(digitsOnly, vat, 2)) {
+        return storeName;
+      }
+    }
+
+    return null;
+  }
+
+  private containsApproximateDigitSequence(
+    haystackDigits: string,
+    targetDigits: string,
+    maxDistance: number,
+  ): boolean {
+    const targetLength = targetDigits.length;
+    if (targetLength === 0 || haystackDigits.length < targetLength - 1) {
+      return false;
+    }
+
+    const candidateLengths = [
+      Math.max(1, targetLength - 1),
+      targetLength,
+      targetLength + 1,
+    ];
+
+    for (const candidateLength of candidateLengths) {
+      if (candidateLength > haystackDigits.length) {
+        continue;
+      }
+
+      for (
+        let index = 0;
+        index <= haystackDigits.length - candidateLength;
+        index += 1
+      ) {
+        const candidate = haystackDigits.slice(index, index + candidateLength);
+        const distance = this.levenshteinDistance(candidate, targetDigits);
+        if (distance <= maxDistance) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private resolveKnownStoreName(lines: string[]): string | null {
+    const headerLines = lines.slice(0, 24);
+    if (headerLines.length === 0) {
+      return null;
+    }
+
+    const headerText = this.normalizeForMatching(headerLines.join(' '));
+    const normalizedLines = headerLines
+      .map((line) => this.normalizeForMatching(line))
+      .filter(Boolean);
+
+    if (!headerText && normalizedLines.length === 0) {
+      return null;
+    }
+
+    const headerTokens = this.toTokenSet(headerText);
+    let bestMatch: { canonicalName: string; score: number } | null = null;
+
+    // Evaluate aliases against both full header text and individual header lines.
+    for (const pattern of KNOWN_STORE_PATTERNS) {
+      let patternBestScore = 0;
+
+      for (const alias of pattern.aliases) {
+        const normalizedAlias = this.normalizeForMatching(alias);
+        if (!normalizedAlias) {
+          continue;
+        }
+
+        const aliasTokens = this.toTokenSet(normalizedAlias);
+        if (headerText) {
+          let score = this.computeSimilarityScore(
+            headerText,
+            headerTokens,
+            normalizedAlias,
+            aliasTokens,
+          );
+          if (headerText.includes(normalizedAlias)) {
+            score = Math.min(1, score + 0.2);
+          }
+          patternBestScore = Math.max(patternBestScore, score);
+        }
+
+        for (const normalizedLine of normalizedLines) {
+          const lineTokens = this.toTokenSet(normalizedLine);
+          let score = this.computeSimilarityScore(
+            normalizedLine,
+            lineTokens,
+            normalizedAlias,
+            aliasTokens,
+          );
+          if (normalizedLine.includes(normalizedAlias)) {
+            score = Math.min(1, score + 0.3);
+          }
+          patternBestScore = Math.max(patternBestScore, score);
+        }
+      }
+
+      if (!bestMatch || patternBestScore > bestMatch.score) {
+        bestMatch = {
+          canonicalName: pattern.canonicalName,
+          score: patternBestScore,
+        };
+      }
+    }
+
+    if (bestMatch && bestMatch.score >= 0.44) {
+      return bestMatch.canonicalName;
+    }
+
+    return null;
+  }
+
+  private resolveKnownStoreNameByTokenHints(rawText: string): string | null {
+    const normalizedText = this.normalizeForMatching(rawText);
+    if (!normalizedText) {
+      return null;
+    }
+
+    const tokens = normalizedText
+      .split(' ')
+      .filter((token) => token.length >= 3);
+    if (tokens.length === 0) {
+      return null;
+    }
+
+    let bestMatch: { canonicalName: string; score: number } | null = null;
+
+    for (const pattern of KNOWN_STORE_PATTERNS) {
+      let score = 0;
+      for (const alias of pattern.aliases) {
+        const aliasTokens = this.normalizeForMatching(alias)
+          .split(' ')
+          .filter((token) => token.length >= 2);
+
+        for (const aliasToken of aliasTokens) {
+          const hasNearToken = tokens.some((token) => {
+            if (token === aliasToken) {
+              return true;
+            }
+
+            if (Math.abs(token.length - aliasToken.length) > 1) {
+              return false;
+            }
+
+            return this.levenshteinDistance(token, aliasToken) <= 1;
+          });
+
+          if (hasNearToken) {
+            score += aliasToken.length >= 5 ? 2 : 1;
+          }
+        }
+      }
+
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = {
+          canonicalName: pattern.canonicalName,
+          score,
+        };
+      }
+    }
+
+    if (bestMatch && bestMatch.score >= 3) {
+      return bestMatch.canonicalName;
+    }
+
+    return null;
   }
 
   private normalizeStoreName(value: string | undefined): string {
@@ -1547,7 +2368,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private parseMoneyValue(rawValue: string): number {
-    const trimmed = rawValue.trim();
+    const trimmed = this.sanitizeNumericToken(rawValue).trim();
     const normalized = trimmed.includes(',')
       ? trimmed.replace(/\./g, '').replace(',', '.')
       : trimmed;
@@ -1560,9 +2381,15 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private parsePercentValue(rawValue: string): number {
-    const normalized = rawValue.replace(',', '.').trim();
+    const normalized = this.sanitizeNumericToken(rawValue)
+      .replace(',', '.')
+      .trim();
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private sanitizeNumericToken(rawValue: string): string {
+    return rawValue.replace(/[OQ]/gi, '0').replace(/[Il]/g, '1');
   }
 
   private normalizeProductName(rawName: string): string {
@@ -1571,7 +2398,60 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
       .replace(/^[A-Z]-/i, '')
       .replace(/^[A-Z]\s+/i, '');
 
-    return withoutPrefix.replace(/\s+/g, ' ').trim();
+    return withoutPrefix
+      .replace(/[^A-Za-z0-9\s.'/-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private isLikelyProductName(
+    rawName: string,
+    normalizedName: string,
+    strict: boolean,
+  ): boolean {
+    if (!normalizedName || normalizedName.length < 2) {
+      return false;
+    }
+
+    const letters = (normalizedName.match(/[A-Za-z]/g) ?? []).length;
+    const digits = (normalizedName.match(/\d/g) ?? []).length;
+    if (letters < 2) {
+      return false;
+    }
+
+    const normalizedUpper = this.normalizeForMatching(normalizedName);
+    if (
+      /^(DOCUMENTO|DESCRIZIONE|P I|VIA|TEL|PAGAMENTO|IMPORTO|SUBTOTALE|TOTALE|COMPLESSIVO)$/.test(
+        normalizedUpper,
+      )
+    ) {
+      return false;
+    }
+
+    const normalizedTokens = normalizedUpper.split(' ').filter(Boolean);
+    if (normalizedTokens.length === 0) {
+      return false;
+    }
+
+    const hasWordLikeToken = normalizedTokens.some(
+      (token) => token.length >= 3,
+    );
+    if (!hasWordLikeToken && letters < 4) {
+      return false;
+    }
+
+    if (!strict) {
+      return true;
+    }
+
+    const rawTrimmed = rawName.trim();
+    const badChars = (rawTrimmed.match(/[^A-Za-z0-9\s.'/-]/g) ?? []).length;
+    const signalChars = Math.max(1, letters + digits);
+    if (badChars / signalChars > 0.6) {
+      return false;
+    }
+
+    return true;
   }
 
   private normalizeForMatching(rawName: string): string {
@@ -1591,10 +2471,11 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     total: number | null;
     rawText: string;
   }): Promise<number | null> {
+    // Duplicate detection combines normalized OCR text and rounded total inside same store.
     const rows = await this.queryRows<ExistingReceiptCandidateRow>(
       `
         SELECT nr.id, nr.raw_text, nr.total
-        FROM normalized_receipts nr
+        FROM spesa_receipts nr
         INNER JOIN stores s ON s.id = nr.store_id
         WHERE s.store_key = ?
         ORDER BY nr.id DESC
@@ -1634,160 +2515,283 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     return null;
   }
 
-  private async migrateLegacySpesaTablesToNormalizedSchema(): Promise<void> {
+  private async migrateLegacySpesaData(): Promise<void> {
+    // One-shot compatibility migration from legacy/pre-normalized tables.
+    const hasLegacyMapping = await this.tableExists('receipt_product_mapping');
+    const hasLegacyReceipts = await this.tableExists('receipts');
+    const hasLegacyItems = await this.tableExists('receipt_items');
+    const hasPrefixedReceipts = await this.tableExists('normalized_receipts');
+    const hasPrefixedItems = await this.tableExists('normalized_receipt_items');
+
+    if (
+      !hasLegacyMapping &&
+      !hasLegacyReceipts &&
+      !hasLegacyItems &&
+      !hasPrefixedReceipts &&
+      !hasPrefixedItems
+    ) {
+      return;
+    }
+
     const now = new Date().toISOString();
 
+    if (hasLegacyMapping) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
+          SELECT DISTINCT store_key, store_name, ?, ?
+          FROM receipt_product_mapping
+        `,
+        [now, now],
+      );
+    }
+
+    if (hasLegacyReceipts) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
+          SELECT DISTINCT store_key, store_name, ?, ?
+          FROM receipts
+        `,
+        [now, now],
+      );
+    }
+
+    if (hasLegacyMapping) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO receipt_products (
+            receipt_name_raw,
+            receipt_name_normalized,
+            created_at,
+            updated_at
+          )
+          SELECT DISTINCT receipt_name_raw, receipt_name_normalized, ?, ?
+          FROM receipt_product_mapping
+        `,
+        [now, now],
+      );
+    }
+
+    if (hasLegacyItems) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO receipt_products (
+            receipt_name_raw,
+            receipt_name_normalized,
+            created_at,
+            updated_at
+          )
+          SELECT DISTINCT receipt_product_name, receipt_product_name_normalized, ?, ?
+          FROM receipt_items
+        `,
+        [now, now],
+      );
+    }
+
+    if (hasLegacyMapping) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
+          SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
+          FROM receipt_product_mapping
+        `,
+        [now],
+      );
+    }
+
+    if (hasLegacyItems) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
+          SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
+          FROM receipt_items
+        `,
+        [now],
+      );
+    }
+
+    if (hasLegacyMapping) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO receipt_product_mappings (
+            store_id,
+            receipt_product_id,
+            grocy_product_id,
+            confidence,
+            usage_count,
+            last_used_at,
+            created_at,
+            updated_at
+          )
+          SELECT
+            s.id,
+            rp.id,
+            rpm.grocy_product_id,
+            rpm.confidence,
+            rpm.usage_count,
+            rpm.last_used_at,
+            rpm.created_at,
+            rpm.updated_at
+          FROM receipt_product_mapping rpm
+          INNER JOIN stores s ON s.store_key = rpm.store_key
+          INNER JOIN receipt_products rp ON rp.receipt_name_normalized = rpm.receipt_name_normalized
+        `,
+      );
+    }
+
+    if (hasLegacyReceipts) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO spesa_receipts (
+            id,
+            store_id,
+            purchased_at,
+            source,
+            file_name,
+            subtotal,
+            total,
+            raw_text,
+            fingerprint,
+            created_at
+          )
+          SELECT
+            r.id,
+            s.id,
+            r.purchased_at,
+            r.source,
+            r.file_name,
+            r.subtotal,
+            r.total,
+            r.raw_text,
+            r.fingerprint,
+            r.created_at
+          FROM receipts r
+          INNER JOIN stores s ON s.store_key = r.store_key
+        `,
+      );
+    }
+
+    if (hasPrefixedReceipts) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO spesa_receipts (
+            id,
+            store_id,
+            purchased_at,
+            source,
+            file_name,
+            subtotal,
+            total,
+            raw_text,
+            fingerprint,
+            created_at
+          )
+          SELECT
+            id,
+            store_id,
+            purchased_at,
+            source,
+            file_name,
+            subtotal,
+            total,
+            raw_text,
+            fingerprint,
+            created_at
+          FROM normalized_receipts
+        `,
+      );
+    }
+
+    if (hasLegacyItems) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO spesa_receipt_items (
+            id,
+            receipt_id,
+            receipt_product_id,
+            grocy_product_id,
+            quantity,
+            unit_price,
+            discount_total,
+            line_total_discounted,
+            vat_rate,
+            created_at
+          )
+          SELECT
+            ri.id,
+            ri.receipt_id,
+            rp.id,
+            ri.grocy_product_id,
+            ri.quantity,
+            ri.unit_price,
+            ri.discount_total,
+            ri.line_total_discounted,
+            ri.vat_rate,
+            ri.created_at
+          FROM receipt_items ri
+          INNER JOIN spesa_receipts nr ON nr.id = ri.receipt_id
+          INNER JOIN receipt_products rp ON rp.receipt_name_normalized = ri.receipt_product_name_normalized
+        `,
+      );
+    }
+
+    if (hasPrefixedItems) {
+      await this.dataSource.query(
+        `
+          INSERT OR IGNORE INTO spesa_receipt_items (
+            id,
+            receipt_id,
+            receipt_product_id,
+            grocy_product_id,
+            quantity,
+            unit_price,
+            discount_total,
+            line_total_discounted,
+            vat_rate,
+            created_at
+          )
+          SELECT
+            id,
+            receipt_id,
+            receipt_product_id,
+            grocy_product_id,
+            quantity,
+            unit_price,
+            discount_total,
+            line_total_discounted,
+            vat_rate,
+            created_at
+          FROM normalized_receipt_items
+        `,
+      );
+    }
+  }
+
+  private async dropLegacySpesaTables(): Promise<void> {
     await this.dataSource.query(
+      'DROP TABLE IF EXISTS normalized_receipt_items',
+    );
+    await this.dataSource.query('DROP TABLE IF EXISTS normalized_receipts');
+    await this.dataSource.query('DROP TABLE IF EXISTS product_price_history');
+    await this.dataSource.query('DROP TABLE IF EXISTS receipt_items');
+    await this.dataSource.query('DROP TABLE IF EXISTS receipts');
+    await this.dataSource.query('DROP TABLE IF EXISTS receipt_product_mapping');
+  }
+
+  private async tableExists(tableName: string): Promise<boolean> {
+    const rows = await this.queryRows<{ name: string }>(
       `
-        INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
-        SELECT DISTINCT store_key, store_name, ?, ?
-        FROM receipt_product_mapping
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name = ?
+        LIMIT 1
       `,
-      [now, now],
+      [tableName],
     );
 
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO stores (store_key, store_name, created_at, updated_at)
-        SELECT DISTINCT store_key, store_name, ?, ?
-        FROM receipts
-      `,
-      [now, now],
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO receipt_products (
-          receipt_name_raw,
-          receipt_name_normalized,
-          created_at,
-          updated_at
-        )
-        SELECT DISTINCT receipt_name_raw, receipt_name_normalized, ?, ?
-        FROM receipt_product_mapping
-      `,
-      [now, now],
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO receipt_products (
-          receipt_name_raw,
-          receipt_name_normalized,
-          created_at,
-          updated_at
-        )
-        SELECT DISTINCT receipt_product_name, receipt_product_name_normalized, ?, ?
-        FROM receipt_items
-      `,
-      [now, now],
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
-        SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
-        FROM receipt_product_mapping
-      `,
-      [now],
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO grocy_products (id, name_snapshot, updated_at)
-        SELECT DISTINCT grocy_product_id, grocy_product_name_snapshot, ?
-        FROM receipt_items
-      `,
-      [now],
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO receipt_product_mappings (
-          store_id,
-          receipt_product_id,
-          grocy_product_id,
-          confidence,
-          usage_count,
-          last_used_at,
-          created_at,
-          updated_at
-        )
-        SELECT
-          s.id,
-          rp.id,
-          rpm.grocy_product_id,
-          rpm.confidence,
-          rpm.usage_count,
-          rpm.last_used_at,
-          rpm.created_at,
-          rpm.updated_at
-        FROM receipt_product_mapping rpm
-        INNER JOIN stores s ON s.store_key = rpm.store_key
-        INNER JOIN receipt_products rp ON rp.receipt_name_normalized = rpm.receipt_name_normalized
-      `,
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO normalized_receipts (
-          id,
-          store_id,
-          purchased_at,
-          source,
-          file_name,
-          subtotal,
-          total,
-          raw_text,
-          fingerprint,
-          created_at
-        )
-        SELECT
-          r.id,
-          s.id,
-          r.purchased_at,
-          r.source,
-          r.file_name,
-          r.subtotal,
-          r.total,
-          r.raw_text,
-          r.fingerprint,
-          r.created_at
-        FROM receipts r
-        INNER JOIN stores s ON s.store_key = r.store_key
-      `,
-    );
-
-    await this.dataSource.query(
-      `
-        INSERT OR IGNORE INTO normalized_receipt_items (
-          id,
-          receipt_id,
-          receipt_product_id,
-          grocy_product_id,
-          quantity,
-          unit_price,
-          discount_total,
-          line_total_discounted,
-          vat_rate,
-          created_at
-        )
-        SELECT
-          ri.id,
-          ri.receipt_id,
-          rp.id,
-          ri.grocy_product_id,
-          ri.quantity,
-          ri.unit_price,
-          ri.discount_total,
-          ri.line_total_discounted,
-          ri.vat_rate,
-          ri.created_at
-        FROM receipt_items ri
-        INNER JOIN normalized_receipts nr ON nr.id = ri.receipt_id
-        INNER JOIN receipt_products rp ON rp.receipt_name_normalized = ri.receipt_product_name_normalized
-      `,
-    );
+    return rows.length > 0;
   }
 
   private async ensureStoreId(
@@ -1795,6 +2799,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     storeName: string,
     queryable: Pick<QueryRunner, 'query'> | DataSource = this.dataSource,
   ): Promise<number> {
+    // Idempotent upsert so all downstream writes can rely on a stable store FK.
     const now = new Date().toISOString();
 
     await queryable.query(
@@ -1829,6 +2834,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     receiptNameNormalized: string,
     queryable: Pick<QueryRunner, 'query'> | DataSource = this.dataSource,
   ): Promise<number> {
+    // Normalize receipt product identities to a dictionary table reused by mappings/items.
     const now = new Date().toISOString();
 
     await queryable.query(
@@ -1894,6 +2900,127 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     }
 
     return result as T[];
+  }
+
+  private normalizeReceiptsPage(value: number | undefined): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return DEFAULT_RECEIPTS_PAGE;
+    }
+
+    const rounded = Math.trunc(value);
+    if (rounded <= 0) {
+      return DEFAULT_RECEIPTS_PAGE;
+    }
+
+    return rounded;
+  }
+
+  private normalizeReceiptsPageSize(value: number | undefined): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return DEFAULT_RECEIPTS_PAGE_SIZE;
+    }
+
+    const rounded = Math.trunc(value);
+    if (rounded <= 0) {
+      return DEFAULT_RECEIPTS_PAGE_SIZE;
+    }
+
+    return Math.min(rounded, MAX_RECEIPTS_PAGE_SIZE);
+  }
+
+  private normalizeReceiptId(value: number): number {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new BadRequestException('ID scontrino non valido.');
+    }
+
+    return value;
+  }
+
+  private async ensureSpesaReceiptItemsCascadeDelete(): Promise<void> {
+    const fkRows = await this.queryRows<{
+      table: string;
+      from: string;
+      on_delete: string;
+    }>(`PRAGMA foreign_key_list('spesa_receipt_items')`, []);
+
+    const receiptForeignKey = fkRows.find(
+      (row) => row.table === 'spesa_receipts' && row.from === 'receipt_id',
+    );
+
+    if (
+      receiptForeignKey &&
+      receiptForeignKey.on_delete.toUpperCase() === 'CASCADE'
+    ) {
+      return;
+    }
+
+    this.logger.log(
+      'Aggiornamento schema SQLite: ON DELETE CASCADE su spesa_receipt_items.receipt_id',
+    );
+
+    await this.dataSource.query('PRAGMA foreign_keys = OFF');
+    try {
+      await this.dataSource.query(
+        'ALTER TABLE spesa_receipt_items RENAME TO spesa_receipt_items__old',
+      );
+
+      await this.dataSource.query(`
+        CREATE TABLE spesa_receipt_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          receipt_id INTEGER NOT NULL,
+          receipt_product_id INTEGER NOT NULL,
+          grocy_product_id INTEGER NOT NULL,
+          quantity REAL NOT NULL,
+          unit_price REAL NOT NULL,
+          discount_total REAL NOT NULL,
+          line_total_discounted REAL NOT NULL,
+          vat_rate REAL NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (receipt_id) REFERENCES spesa_receipts(id) ON DELETE CASCADE,
+          FOREIGN KEY (receipt_product_id) REFERENCES receipt_products(id),
+          FOREIGN KEY (grocy_product_id) REFERENCES grocy_products(id)
+        )
+      `);
+
+      await this.dataSource.query(`
+        INSERT INTO spesa_receipt_items (
+          id,
+          receipt_id,
+          receipt_product_id,
+          grocy_product_id,
+          quantity,
+          unit_price,
+          discount_total,
+          line_total_discounted,
+          vat_rate,
+          created_at
+        )
+        SELECT
+          id,
+          receipt_id,
+          receipt_product_id,
+          grocy_product_id,
+          quantity,
+          unit_price,
+          discount_total,
+          line_total_discounted,
+          vat_rate,
+          created_at
+        FROM spesa_receipt_items__old
+      `);
+
+      await this.dataSource.query('DROP TABLE spesa_receipt_items__old');
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_spesa_receipt_items_receipt
+        ON spesa_receipt_items(receipt_id)
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_spesa_receipt_items_product
+        ON spesa_receipt_items(grocy_product_id)
+      `);
+    } finally {
+      await this.dataSource.query('PRAGMA foreign_keys = ON');
+    }
   }
 
   private looksLikeDiscountRow(rawName: string): boolean {
@@ -1995,6 +3122,7 @@ export class SpesaService implements OnModuleInit, OnModuleDestroy {
     total: number | null;
     rawText: string;
   }): string {
+    // Fingerprint is used for idempotent imports and duplicate-save prevention.
     const material = [
       input.storeKey,
       input.purchasedAt.slice(0, 16),

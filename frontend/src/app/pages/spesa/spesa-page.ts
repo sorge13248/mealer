@@ -4,6 +4,10 @@ import { LucideCheck, LucideDynamicIcon, LucideSearch } from '@lucide/angular';
 import { ApiEndpointsService } from '../../api/api-endpoints';
 import { BackButtonComponent } from '../../components/back-button/back-button';
 import { ItemCardComponent } from '../../components/item-card/item-card';
+import {
+    ReceiptParsingPreviewComponent,
+    type ReceiptParsingPreviewModel,
+} from '../../components/receipt-parsing-preview/receipt-parsing-preview';
 import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import { Item } from '../shared/product-shared';
 
@@ -72,7 +76,7 @@ type GrocySearchProduct = Item;
 @Component({
     selector: 'app-spesa-page',
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [BackButtonComponent, LucideDynamicIcon, ItemCardComponent],
+    imports: [BackButtonComponent, LucideDynamicIcon, ItemCardComponent, ReceiptParsingPreviewComponent],
     templateUrl: './spesa-page.html',
     styleUrl: './spesa-page.scss',
     host: {
@@ -716,16 +720,19 @@ export class SpesaPage {
         return [...uniqueNames.values()].map((name) => ({ name }));
     }
 
-    protected formatMoney(value: number | null): string {
-        if (value === null) {
-            return '-';
-        }
-
-        return new Intl.NumberFormat('it-IT', {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(value);
+    protected toParsingPreviewModel(parsed: ParsedReceiptResponse): ReceiptParsingPreviewModel {
+        return {
+            source: parsed.source,
+            items: parsed.items.map((item) => ({
+                name: item.name,
+                rawName: item.rawName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                discountTotal: item.discountTotal,
+                totalPrice: item.totalPrice,
+            })),
+            subtotal: parsed.subtotal,
+            total: parsed.total,
+        };
     }
 }

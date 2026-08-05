@@ -49,6 +49,21 @@ export class ApiEndpointsService {
     return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipt/save`;
   }
 
+  spesaReceipts(page: number, pageSize: number): string {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts?${params.toString()}`;
+  }
+
+  spesaReceiptDetail(receiptId: number): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
+  }
+
+  spesaDeleteReceipt(receiptId: number): string {
+    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
+  }
+
   spesaInsights(days: number, productIds: number[]): string {
     const params = new URLSearchParams();
     params.set('days', String(days));

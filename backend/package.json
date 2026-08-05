@@ -27,6 +27,7 @@
     "@nestjs/typeorm": "^11.0.3",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
+    "jimp": "^1.6.1",
     "pdf-parse": "^1.1.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

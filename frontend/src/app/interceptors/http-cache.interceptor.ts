@@ -13,6 +13,7 @@ export const HTTP_CACHE_ENABLED = new HttpContextToken<boolean>(() => false);
 const responseCache = new Map<string, HttpResponse<unknown>>();
 
 export function withHttpCache(enabled = true): HttpContext {
+  // Opt-in switch per request to avoid accidental caching of mutable endpoints.
   return new HttpContext().set(HTTP_CACHE_ENABLED, enabled);
 }
 
@@ -22,6 +23,7 @@ export const httpCacheInterceptor: HttpInterceptorFn = (request, next): Observab
   }
 
   const cacheKey = buildCacheKey(request);
+  // Clone cached responses to keep HttpResponse immutability guarantees for callers.
   const cachedResponse = responseCache.get(cacheKey);
   if (cachedResponse) {
     return of(cachedResponse.clone());
@@ -37,6 +39,7 @@ export const httpCacheInterceptor: HttpInterceptorFn = (request, next): Observab
 };
 
 function buildCacheKey(request: HttpRequest<unknown>): string {
+  // Include method + URL + stable body snapshot to avoid key collisions.
   return [
     request.method,
     request.urlWithParams,
@@ -45,6 +48,7 @@ function buildCacheKey(request: HttpRequest<unknown>): string {
 }
 
 function stableSerialize(value: unknown): string {
+  // Stable object-key ordering ensures logically equal payloads hash to same cache key.
   if (value === undefined) {
     return 'undefined';
   }

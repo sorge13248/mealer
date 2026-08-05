@@ -19,6 +19,7 @@ interface GrocyPictureResponse {
 @Injectable()
 export class GrocyService {
   constructor(private readonly httpService: HttpService) {
+    // Inject API key on every outbound request so callers never handle secrets directly.
     this.httpService.axiosRef.interceptors.request.use(
       createGrocyApiKeyInterceptor(() => this.readConfig().apiKey),
     );
@@ -43,6 +44,7 @@ export class GrocyService {
   async getProductPictureByEncodedName(
     encodedFileName: string,
   ): Promise<GrocyPictureResponse> {
+    // Product pictures use encoded names in Grocy paths; normalize URL-safe base64 first.
     const normalizedToken = this.normalizeBase64Token(encodedFileName);
 
     try {
@@ -82,6 +84,7 @@ export class GrocyService {
   }
 
   private async get(path: string): Promise<unknown> {
+    // Thin proxy wrapper to centralize timeout/base URL/error mapping.
     try {
       const config = this.readConfig();
       const response = await this.httpService.axiosRef.get(path, {
@@ -118,6 +121,7 @@ export class GrocyService {
   }
 
   private normalizeBase64Token(rawEncodedValue: string): string {
+    // Accept URL-safe base64 and pad to canonical length for decode/stable URLs.
     const trimmedValue = rawEncodedValue.trim();
     if (!trimmedValue) {
       throw new BadRequestException('Invalid encoded file name');
@@ -135,6 +139,7 @@ export class GrocyService {
   }
 
   private throwAsHttpException(error: unknown): never {
+    // Preserve Grocy response payload/status while translating transport failures.
     if (error instanceof AxiosError) {
       const statusCode = error.response?.status ?? HttpStatus.BAD_GATEWAY;
       const responseData: unknown = error.response?.data;
