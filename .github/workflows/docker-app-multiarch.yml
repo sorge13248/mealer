@@ -1,4 +1,4 @@
-name: docker-frontend-multiarch
+name: docker-app-multiarch
 
 on:
   push:
@@ -7,19 +7,27 @@ on:
     tags:
       - 'v*'
     paths:
+      - backend/**
       - frontend/**
-      - .github/workflows/docker-frontend-multiarch.yml
+      - Dockerfile
+      - deploy/**
+      - docker-compose.yml
+      - .github/workflows/docker-app-multiarch.yml
   pull_request:
     branches:
       - main
     paths:
+      - backend/**
       - frontend/**
-      - .github/workflows/docker-frontend-multiarch.yml
+      - Dockerfile
+      - deploy/**
+      - docker-compose.yml
+      - .github/workflows/docker-app-multiarch.yml
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-frontend
+  IMAGE_NAME: ${{ github.repository }}-app
 
 jobs:
   build-and-publish:
@@ -60,8 +68,8 @@ jobs:
       - name: Build and push multi-arch image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: .
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

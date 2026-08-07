@@ -28,11 +28,15 @@ function parseAllowedOrigins(value: string | undefined): string[] {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const corsOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
-  app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : false,
-    credentials: true,
-  });
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (!isProduction) {
+    const corsOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+    app.enableCors({
+      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      credentials: true,
+    });
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

@@ -1,18 +1,12 @@
 services:
-  frontend:
-    image: ghcr.io/sorge13248/mealer-frontend
-    container_name: mealer-frontend
-    ports:
-      - 8080:8080
-    volumes:
-      - ./config.json:/usr/share/nginx/html/config.json:ro
-
-  backend:
-    container_name: mealer-backend
-    image: ghcr.io/sorge13248/mealer-backend
+  app:
+    container_name: mealer-app
+    image: ghcr.io/sorge13248/mealer-app
     build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -21,30 +15,29 @@ services:
       DB_AUTO_LOAD_ENTITIES: ${DB_AUTO_LOAD_ENTITIES:-true}
       DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
       DB_LOGGING: ${DB_LOGGING:-false}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost:4200"]}
       GROCY_BASE_URL: ${GROCY_BASE_URL}
       GROCY_API_KEY: ${GROCY_API_KEY}
       GROCY_TIMEOUT_MS: ${GROCY_TIMEOUT_MS:-10000}
       OCR_PROVIDER_ORDER: ${OCR_PROVIDER_ORDER:-selfhosted-http,tesseract}
       OCR_HTTP_ENABLED: ${OCR_HTTP_ENABLED:-true}
-      OCR_HTTP_URL: ${OCR_HTTP_URL:-http://mealer-ocr:8000/ocr/receipt/base64}
+      OCR_HTTP_URL: http://ocr:8000/ocr/receipt/base64
       OCR_HTTP_TIMEOUT_MS: ${OCR_HTTP_TIMEOUT_MS:-45000}
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "${APP_PORT:-8080}:8080"
     depends_on:
       ocr:
         condition: service_started
     volumes:
+      - ./config.json:/usr/share/nginx/html/config.json:ro
       - mealer-backend-data:/app/data
     healthcheck:
       test:
         - CMD-SHELL
-        - >
-          node -e 'const fs=require("node:fs");const path=require("node:path");const http=require("node:http");const dbPath=path.resolve(process.env.DB_PATH||"/app/data/mealer.sqlite");const dbOk=fs.existsSync(dbPath);const req=http.get({host:"127.0.0.1",port:Number(process.env.PORT||3000),path:"/health",timeout:3000},(res)=>{const httpOk=res.statusCode===200;res.resume();process.exit(httpOk&&dbOk?0:1);});req.on("error",()=>process.exit(1));req.on("timeout",()=>{req.destroy();process.exit(1);});'
+        - wget -q -O /dev/null http://127.0.0.1:8080/health
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 25s
 
   ocr:
     image: ghcr.io/sorge13248/mealer-ocr

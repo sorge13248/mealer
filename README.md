@@ -89,7 +89,9 @@ npm run test
 
 ## Docker produzione
 
-Vedi docker-compose.yml alla root e backend/Dockerfile.prod.
+Lo stack di produzione usa una singola immagine `mealer-app` (frontend Angular statico + backend NestJS) servita da Nginx con reverse proxy API su `/api`.
+
+Vedi `docker-compose.yml` e `Dockerfile` alla root.
 
 Lo stack ora include anche `ocr` (container `mealer-ocr`) usato dal backend come provider OCR locale primario, con fallback automatico a Tesseract interno backend.
 
@@ -100,8 +102,7 @@ Con `docker-compose` il file viene montato da `./config.json` verso `/usr/share/
 
 Le workflow sono alla root in `.github/workflows`:
 
-- `docker-frontend-multiarch.yml`: build/publish immagine frontend (`frontend/**`)
-- `docker-backend-multiarch.yml`: build/publish immagine backend (`backend/**`)
+- `docker-app-multiarch.yml`: build/publish immagine app unificata (`backend/**`, `frontend/**`, `Dockerfile`, `deploy/**`)
 - `docker-ocr-multiarch.yml`: build/publish immagine OCR service (`ocr/**`)
 
-Tutte e tre pubblicano su GHCR immagini multi-arch (`linux/amd64`, `linux/arm64`) e usano trigger `paths` per eseguire solo quando cambia la rispettiva app.
+Entrambe pubblicano su GHCR immagini multi-arch (`linux/amd64`, `linux/arm64`) e usano trigger `paths` per eseguire solo quando cambia la rispettiva app.

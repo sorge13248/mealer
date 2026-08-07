@@ -51,13 +51,13 @@ Example:
 
 ```json
 {
-  "backendApiBaseUrl": "http://localhost:3000"
+  "backendApiBaseUrl": "/api"
 }
 ```
 
 Default file for local build: `public/config.json`.
 
-In Docker Compose, runtime config is mounted from `frontend/runtime-config/config.json` to `/usr/share/nginx/html/config.json`, so you can change configuration without rebuilding the frontend image.
+In Docker Compose, runtime config is mounted from `./config.json` (repo root) to `/usr/share/nginx/html/config.json`, so you can change configuration without rebuilding the app image.
 
 ### 4. Build and test
 
@@ -73,28 +73,27 @@ npm test
 Build local image:
 
 ```bash
-docker build -t mealer:prod .
+docker build -t mealer-app:prod ..
 ```
 
 Run container:
 
 ```bash
-docker run --rm -p 8080:8080 mealer:prod
+docker run --rm -p 8080:8080 mealer-app:prod
 ```
 
 Notes:
 
-- Runtime image uses `nginx:alpine`
-- Container runs as non-root user
-- App is served on port `8080`
+- Production app is served by nginx on port `8080`
+- API calls go to same origin under `/api`
 
 ### Option B: GitHub Actions + GHCR
 
-Workflow file: `.github/workflows/docker-multiarch.yml`
+Workflow file: `.github/workflows/docker-app-multiarch.yml`
 
-On push to `main` (and on schedule/manual trigger), CI builds multi-arch images and publishes to GHCR:
+On push to `main` (and on manual trigger), CI builds multi-arch images and publishes to GHCR:
 
-- `ghcr.io/sorge13248/mealer:latest`
+- `ghcr.io/sorge13248/mealer-app:latest`
 - additional tags based on branch/tag/sha
 
 Pull example:

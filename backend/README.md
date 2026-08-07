@@ -79,10 +79,10 @@ The backend exposes a Grocy proxy under `/grocy/*` and forwards requests to Groc
 
 ## Production with Docker Compose
 
-At repository root there is a production compose file and a production Dockerfile for backend:
+At repository root there is a production compose file and a unified Dockerfile for app runtime (frontend + backend behind nginx):
 
 - `docker-compose.yml`
-- `backend/Dockerfile.prod`
+- `Dockerfile`
 
 Example:
 
