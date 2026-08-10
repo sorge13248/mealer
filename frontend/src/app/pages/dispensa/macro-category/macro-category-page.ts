@@ -3,11 +3,11 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
-import { ApiEndpointsService } from '../../api/api-endpoints';
-import { BackButtonComponent } from '../../components/back-button/back-button';
-import { ItemCardComponent } from '../../components/item-card/item-card';
-import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
-import { withHttpCache } from '../../interceptors/http-cache.interceptor';
+import { ApiEndpointsService } from '../../../api/api-endpoints';
+import { BackButtonComponent } from '../../../components/back-button/back-button';
+import { ItemCardComponent } from '../../../components/item-card/item-card';
+import { LoadingSpinnerComponent } from '../../../components/loading-spinner/loading-spinner';
+import { withHttpCache } from '../../../interceptors/http-cache.interceptor';
 import {
   Item,
   ItemWithStockSummary,
@@ -15,12 +15,12 @@ import {
   StockEntry,
   buildStockSummaryByProductId,
   mapItemsWithStockSummary,
-} from '../shared/product-shared';
+} from '../../shared/product-shared';
 import {
   VIRTUAL_NO_MACROCATEGORY_KEY,
   VIRTUAL_NO_MACROCATEGORY_TITLE
 } from './macro-category.constants';
-import { ParsedMacroCategoryName, parseMacroCategoryName } from '../shared/macro-category-mapping';
+import { ParsedMacroCategoryName, parseMacroCategoryName } from '../../shared/macro-category-mapping';
 
 type MacroCategoryViewItem = ItemWithStockSummary;
 

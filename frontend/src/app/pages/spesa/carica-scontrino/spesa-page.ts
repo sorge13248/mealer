@@ -1,15 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { LucideCheck, LucideDynamicIcon, LucideSearch } from '@lucide/angular';
-import { ApiEndpointsService } from '../../api/api-endpoints';
-import { BackButtonComponent } from '../../components/back-button/back-button';
-import { ItemCardComponent } from '../../components/item-card/item-card';
+import { ApiEndpointsService } from '../../../api/api-endpoints';
+import { BackButtonComponent } from '../../../components/back-button/back-button';
+import { ItemCardComponent } from '../../../components/item-card/item-card';
 import {
     ReceiptParsingPreviewComponent,
     type ReceiptParsingPreviewModel,
-} from '../../components/receipt-parsing-preview/receipt-parsing-preview';
-import { withHttpCache } from '../../interceptors/http-cache.interceptor';
-import { Item } from '../shared/product-shared';
+} from '../../../components/receipt-parsing-preview/receipt-parsing-preview';
+import { withHttpCache } from '../../../interceptors/http-cache.interceptor';
+import { Item } from '../../shared/product-shared';
 
 interface ParsedReceiptItem {
     name: string;

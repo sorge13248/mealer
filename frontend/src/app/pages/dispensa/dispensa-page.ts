@@ -9,7 +9,7 @@ import { withHttpCache } from '../../interceptors/http-cache.interceptor';
 import {
     VIRTUAL_NO_MACROCATEGORY_KEY,
     VIRTUAL_NO_MACROCATEGORY_TITLE
-} from '../macro-category/macro-category.constants';
+} from './macro-category/macro-category.constants';
 import {
     isExcludedMacroCategory,
     parseMacroCategoryName

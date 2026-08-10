@@ -41,6 +41,22 @@ export class GrocyService {
     return this.post(`api/stock/products/${productId}/consume`, payload);
   }
 
+  async updateObject(
+    entity: string,
+    objectId: number,
+    payload: unknown,
+  ): Promise<unknown> {
+    return this.put(`api/objects/${encodeURIComponent(entity)}/${objectId}`, payload);
+  }
+
+  async updateObjectUserfields(
+    entity: string,
+    objectId: number,
+    payload: unknown,
+  ): Promise<unknown> {
+    return this.put(`api/userfields/${encodeURIComponent(entity)}/${objectId}`, payload);
+  }
+
   async getProductPictureByEncodedName(
     encodedFileName: string,
   ): Promise<GrocyPictureResponse> {
@@ -83,6 +99,11 @@ export class GrocyService {
     return `${config.baseUrl}/products`;
   }
 
+  getNewProductPageUrl(): string {
+    const config = this.readConfig();
+    return `${config.baseUrl}/product/new`;
+  }
+
   private async get(path: string): Promise<unknown> {
     // Thin proxy wrapper to centralize timeout/base URL/error mapping.
     try {
@@ -101,6 +122,19 @@ export class GrocyService {
     try {
       const config = this.readConfig();
       const response = await this.httpService.axiosRef.post(path, body, {
+        baseURL: config.baseUrl,
+        timeout: config.timeoutMs,
+      });
+      return response.data;
+    } catch (error) {
+      this.throwAsHttpException(error);
+    }
+  }
+
+  private async put(path: string, body: unknown): Promise<unknown> {
+    try {
+      const config = this.readConfig();
+      const response = await this.httpService.axiosRef.put(path, body, {
         baseURL: config.baseUrl,
         timeout: config.timeoutMs,
       });

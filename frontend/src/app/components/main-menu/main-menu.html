@@ -1,0 +1,34 @@
+<nav class="main-menu" aria-label="Menu principale">
+  <a
+    routerLink="/dispensa"
+    routerLinkActive="menu-link-active menu-link-dispensa-active"
+    [routerLinkActiveOptions]="{ exact: false }"
+    class="menu-link menu-link-dispensa"
+    aria-label="Vai alla dispensa"
+  >
+    <svg [lucideIcon]="pantryIcon" class="menu-icon" aria-hidden="true"></svg>
+    <span class="menu-text">Dispensa</span>
+  </a>
+
+  <a
+    routerLink="/meal-planner"
+    routerLinkActive="menu-link-active menu-link-planner-active"
+    [routerLinkActiveOptions]="{ exact: true }"
+    class="menu-link menu-link-planner"
+    aria-label="Vai al meal planner"
+  >
+    <svg [lucideIcon]="plannerIcon" class="menu-icon" aria-hidden="true"></svg>
+    <span class="menu-text">Meal Planner</span>
+  </a>
+
+  <a
+    routerLink="/spesa/dashboard"
+    routerLinkActive="menu-link-active menu-link-spesa-active"
+    [routerLinkActiveOptions]="{ exact: false }"
+    class="menu-link menu-link-spesa"
+    aria-label="Vai alla spesa"
+  >
+    <svg [lucideIcon]="shoppingIcon" class="menu-icon" aria-hidden="true"></svg>
+    <span class="menu-text">Spesa</span>
+  </a>
+</nav>

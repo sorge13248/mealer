@@ -1,6 +1,38 @@
 
 You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
 
+## Project Context: Mealer Frontend
+
+This Angular app is organized around three macro areas reachable from the persistent main menu shell:
+
+- `Dispensa`: category browsing, volatile stock, and product data management
+- `Meal planner`: planning area
+- `Spesa`: receipt upload/parsing, mapping, historical receipts, and spending insights
+
+Current route map:
+
+- `/` -> home
+- `/dispensa`
+- `/dispensa/macro-category/:macroCategory`
+- `/dispensa/stock-volatile/:section`
+- `/dispensa/gestione-dati`
+- `/meal-planner`
+- `/spesa/dashboard`
+- `/spesa/carica-scontrino`
+
+The API endpoint builder is centralized in `src/app/api/api-endpoints.ts` and includes:
+
+- Grocy proxy endpoints under `/grocy/*`
+- Spesa endpoints under `/spesa/*` (parse, match candidates, mappings, save, receipts, insights)
+
+Always preserve this folder structure when adding features:
+
+- `src/app/pages/dispensa/*`
+- `src/app/pages/spesa/dashboard/*`
+- `src/app/pages/spesa/carica-scontrino/*`
+
+Do not move pages back to legacy flat paths.
+
 ## TypeScript Best Practices
 
 - Use strict type checking
@@ -22,7 +54,7 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - It MUST pass all AXE checks.
 - It MUST follow all WCAG AA minimums, including focus management, color contrast, and ARIA attributes.
 
-### Components
+## Components
 
 - Keep components small and focused on a single responsibility
 - Use `input()` and `output()` functions instead of decorators
@@ -32,7 +64,7 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Prefer Reactive forms instead of Template-driven ones
 - Do NOT use `ngClass`, use `class` bindings instead
 - Do NOT use `ngStyle`, use `style` bindings instead
-- When using external templates/styles, use paths relative to the component TS file.
+- When using external templates/styles, use paths relative to the component TS file
 
 ## State Management
 
@@ -46,10 +78,16 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Keep templates simple and avoid complex logic
 - Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
 - Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
+- Do not assume globals like `new Date()` are available
 
 ## Services
 
 - Design services around a single responsibility
 - Use the `providedIn: 'root'` option for singleton services
 - Use the `inject()` function instead of constructor injection
+
+## Networking
+
+- Backend base URL is defined in Angular environments (`environment.ts`, `environment.prod.ts`)
+- Do not hardcode hostnames in components/pages
+- Build API URLs only through `ApiEndpointsService`

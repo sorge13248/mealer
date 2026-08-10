@@ -1,159 +1,135 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Mealer Backend (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API NestJS per integrazione Grocy, gestione scontrini e insight spesa.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Cosa fa il backend
 
-## Description
+- Proxy sicuro verso Grocy (`/grocy/*`) con API key gestita lato server
+- Endpoint per lettura/modifica prodotti Grocy e userfields
+- Proxy immagini prodotto Grocy
+- Redirect a pagine Grocy utili dal frontend
+- Parsing scontrini PDF/foto (`/spesa/receipt/parse`)
+- Matching prodotti con storico mapping (`/spesa/match/candidates`, `/spesa/mappings`)
+- Persistenza scontrini e serie storica prezzi (`/spesa/receipt/save`)
+- Insight spesa con aggregazioni temporali (`/spesa/insights`)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Moduli principali
 
-## OCR self-hosted (Sprint 1)
+- `src/grocy`: proxy Grocy
+- `src/spesa`: parsing, matching, persistenza e insight
+- `src/spesa/receipt-parsers`: parser PDF/foto e orchestrazione OCR
 
-Il backend supporta una catena OCR locale a provider multipli, senza API cloud a pagamento.
+## Endpoint principali
 
-- Provider orchestrator: `ReceiptOcrEngineService`
-- Provider 1 (preferito): microservizio HTTP locale (`selfhosted-http`)
-- Provider 2 (fallback): `tesseract` interno al backend
+Grocy:
 
-Variabili ambiente OCR:
+- `GET /grocy/products`
+- `GET /grocy/stock`
+- `GET /grocy/stock/volatile`
+- `POST /grocy/stock/products/:productId/consume`
+- `PUT /grocy/objects/:entity/:objectId`
+- `PUT /grocy/userfields/:entity/:objectId`
+- `GET /grocy/files/productpictures/:encodedFileName`
+- `GET /grocy/product/:productId` (redirect)
+- `GET /grocy/products-page` (redirect)
+- `GET /grocy/product-new-page` (redirect)
+
+Spesa:
+
+- `POST /spesa/receipt/parse`
+- `POST /spesa/match/candidates`
+- `POST /spesa/mappings`
+- `POST /spesa/receipt/save`
+- `GET /spesa/receipts?page=1&pageSize=10`
+- `GET /spesa/receipts/:receiptId`
+- `DELETE /spesa/receipts/:receiptId`
+- `GET /spesa/insights?days=180&productIds=1,2,3`
+
+## OCR self-hosted
+
+Il backend usa una pipeline OCR locale con fallback:
+
+- orchestratore: `ReceiptOcrEngineService`
+- provider primario: HTTP self-hosted (`selfhosted-http`)
+- fallback: Tesseract locale (`tesseract`)
+
+Variabili OCR:
 
 - `OCR_PROVIDER_ORDER` (default: `selfhosted-http,tesseract`)
 - `OCR_HTTP_ENABLED` (default: `true`)
 - `OCR_HTTP_URL` (default: `http://mealer-ocr:8000/ocr/receipt/base64`)
 - `OCR_HTTP_TIMEOUT_MS` (default: `45000`)
 
-Per i PDF scansionati, il parser Adobe prova prima il render pagine via `pdftoppm` (DPI alto), poi il fallback su immagini embedded nel PDF.
+Parsing PDF:
 
-## Project setup
+- PDF con text layer: parser dedicato
+- PDF scansionati (es. Adobe Scan): OCR su render pagina (`pdftoppm`), fallback su immagini embedded
 
-```bash
-$ npm install
-```
+## Database
 
-When you run `npm start` from `backend/`, the app loads environment variables from the parent file `../.env` (repository root), then falls back to `backend/.env` if present.
+SQLite via TypeORM (`better-sqlite3`).
 
-## Database (SQLite)
+Configurazione DB:
 
-The backend is configured with TypeORM and SQLite.
+- `DB_PATH` (default: `mealer.sqlite`)
+- `DB_AUTO_LOAD_ENTITIES` (default: `true`)
+- `DB_SYNCHRONIZE` (default: `false`)
+- `DB_LOGGING` (default: `false`)
 
-- Driver: `better-sqlite3`
-- Database file: `DB_PATH` (default: `mealer.sqlite`)
-- Auto entity loading: `DB_AUTO_LOAD_ENTITIES` (default: `true`)
-- Schema sync: `DB_SYNCHRONIZE` (default: `false`)
-- SQL logging: `DB_LOGGING` (default: `false`)
+Il modulo Spesa inizializza una struttura normalizzata per:
 
-## CORS
+- store
+- prodotti Grocy snapshot
+- prodotti normalizzati da scontrino
+- mapping store+prodotto
+- scontrini
+- righe scontrino e punti prezzo
 
-- Allowed origins: `CORS_ALLOWED_ORIGINS`
+Le migrazioni iniziali sono idempotenti e gestite all'avvio del modulo.
 
-Supported formats for `CORS_ALLOWED_ORIGINS`:
+## Configurazione ambiente
 
-- JSON array (recommended): `["https://app.example.com","https://www.app.example.com"]`
-- Comma-separated string: `https://app.example.com,https://www.app.example.com`
-
-## Grocy Proxy
-
-The backend exposes a Grocy proxy under `/grocy/*` and forwards requests to Grocy using these env vars:
+Grocy:
 
 - `GROCY_BASE_URL` (required)
 - `GROCY_API_KEY` (required)
 - `GROCY_TIMEOUT_MS` (default: `10000`)
 
-## Production with Docker Compose
+CORS:
 
-At repository root there is a production compose file and a unified Dockerfile for app runtime (frontend + backend behind nginx):
+- `CORS_ALLOWED_ORIGINS`
 
-- `docker-compose.yml`
-- `Dockerfile`
+Formati supportati:
 
-Example:
+- JSON array: `["https://app.example.com","https://www.app.example.com"]`
+- stringa separata da virgola: `https://app.example.com,https://www.app.example.com`
+
+Quando avvii il backend da `backend/`, il loader env prova prima `../.env` (root repo), poi `backend/.env`.
+
+## Sviluppo locale
 
 ```bash
-# from repository root
-cp .env.production.example .env
-docker compose up -d --build
+npm install
+npm run start:dev
 ```
 
-## Compile and run the project
+## Test
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run test
+npm run test:e2e
+npm run test:cov
 ```
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Il backend viene deployato nell'immagine app unificata a livello root repository.
+Vedi `../Dockerfile` e `../docker-compose.yml`.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Licenza
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+Questo modulo e rilasciato sotto **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Copyright (C) 2026 Francesco Sorge.
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Vedi [LICENSE](../LICENSE).

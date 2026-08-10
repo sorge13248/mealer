@@ -12,6 +12,55 @@ body {
 	--glass-fill: rgba(51, 122, 183, 0.12);
 	--glass-fill-strong: rgba(51, 122, 183, 0.2);
 	--focus-ring: rgba(51, 122, 183, 0.92);
+
+	--feature-card-hover-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.32),
+		0 20px 42px rgba(2, 10, 21, 0.54);
+	--feature-menu-active-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.24),
+		0 10px 24px rgba(8, 21, 38, 0.34);
+
+	--feature-dispensa-icon-color: #ff8f8f;
+	--feature-dispensa-icon-border: rgba(255, 143, 143, 0.5);
+	--feature-dispensa-icon-bg: rgba(226, 74, 74, 0.22);
+	--feature-dispensa-hover-border: rgba(226, 74, 74, 0.74);
+	--feature-dispensa-hover-bg: linear-gradient(
+		160deg,
+		rgba(255, 255, 255, 0.26) 0%,
+		rgba(226, 74, 74, 0.22) 50%,
+		rgba(9, 25, 47, 0.52) 100%
+	);
+	--feature-dispensa-active-color: #ffd1d1;
+	--feature-dispensa-active-border: rgba(255, 170, 170, 0.78);
+	--feature-dispensa-active-bg: rgba(232, 93, 93, 0.34);
+
+	--feature-planner-icon-color: #95e3b9;
+	--feature-planner-icon-border: rgba(149, 227, 185, 0.5);
+	--feature-planner-icon-bg: rgba(76, 175, 131, 0.2);
+	--feature-planner-hover-border: rgba(76, 175, 131, 0.72);
+	--feature-planner-hover-bg: linear-gradient(
+		160deg,
+		rgba(255, 255, 255, 0.26) 0%,
+		rgba(76, 175, 131, 0.2) 50%,
+		rgba(9, 25, 47, 0.52) 100%
+	);
+	--feature-planner-active-color: #daf7e8;
+	--feature-planner-active-border: rgba(183, 238, 209, 0.78);
+	--feature-planner-active-bg: rgba(89, 194, 145, 0.3);
+
+	--feature-spesa-icon-color: #f3d285;
+	--feature-spesa-icon-border: rgba(243, 210, 133, 0.5);
+	--feature-spesa-icon-bg: rgba(215, 179, 92, 0.2);
+	--feature-spesa-hover-border: rgba(215, 179, 92, 0.72);
+	--feature-spesa-hover-bg: linear-gradient(
+		160deg,
+		rgba(255, 255, 255, 0.26) 0%,
+		rgba(215, 179, 92, 0.18) 50%,
+		rgba(9, 25, 47, 0.52) 100%
+	);
+	--feature-spesa-active-color: #fff0c3;
+	--feature-spesa-active-border: rgba(248, 221, 147, 0.78);
+	--feature-spesa-active-bg: rgba(224, 189, 101, 0.3);
 }
 
 body {

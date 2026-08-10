@@ -1,115 +1,76 @@
-# Mealer
+# Mealer Frontend (Angular)
 
-### Smart pantry browsing for Grocy, with category navigation and stock-priority views
+Applicazione Angular per gestione dispensa e flusso spesa/scontrini, integrata con backend NestJS.
 
-Mealer is an Angular web app that talks to the Nest backend, which proxies Grocy APIs. It helps you browse products by macro category, check expiring/missing items, and inspect stock data with a fast visual workflow.
+## Funzionalita principali
 
-## Features
+- Shell applicativa con menu principale persistente
+- Area `Dispensa`:
+  - riepilogo per macro-categorie
+  - vista stock volatile (in scadenza/scaduti/mancanti)
+  - pagina gestione dati prodotto con editing massivo, filtri, ricerca, ordinamento e paginazione
+- Area `Spesa`:
+  - dashboard insight spesa (trend temporali, top prodotti, filtri)
+  - storico scontrini con dettaglio ed eliminazione
+  - caricamento scontrino (PDF/foto), parsing, suggerimenti abbinamento, salvataggio mapping e prezzi
+- Integrazione API backend:
+  - proxy Grocy su `/grocy/*`
+  - endpoint spesa su `/spesa/*`
+- URL backend definito tramite environment Angular
 
-- Home page grouped by `food_macrocategory`, including a virtual "Senza macrocategoria" section
-- Dedicated macro-category page with product cards, score badges, stock details, and image loading states
-- Dedicated volatile stock page for due, expired, and missing products
-- Backend Grocy proxy integration (`/grocy/*`) with optional HTTP response caching
-- Multi-architecture production container image build (`linux/amd64`, `linux/arm64`) via GitHub Actions
+## Routing principale
 
-## Local development
+- `/` -> home
+- `/dispensa`
+- `/dispensa/macro-category/:macroCategory`
+- `/dispensa/stock-volatile/:section`
+- `/dispensa/gestione-dati`
+- `/meal-planner`
+- `/spesa/dashboard`
+- `/spesa/carica-scontrino`
 
-### 1. Prerequisites
+## Sviluppo locale
 
-- Node.js `24.15.0` or newer supported by the current Angular CLI
-- npm (bundled with Node.js)
+### Requisiti
 
-If you use nvm:
+- Node.js 24+
+- npm
 
-```bash
-source ~/.nvm/nvm.sh
-nvm install 24.15.0
-nvm use 24.15.0
-```
-
-### 2. Install dependencies
+### Installazione
 
 ```bash
 npm ci
 ```
 
-### 3. Run the app
+### Avvio
 
 ```bash
 npm start
 ```
 
-Open `http://localhost:4200`.
+App disponibile su `http://localhost:4200`.
 
-The frontend calls the backend at `http://localhost:3000` by default (see `src/environments/environment.ts`).
+Il frontend usa l'URL backend dagli environment Angular:
 
-### Runtime config (`config.json`)
+- sviluppo: `http://localhost:3000` (`src/environments/environment.ts`)
+- produzione: `/api` (`src/environments/environment.prod.ts`)
 
-At startup, the app loads `/config.json` and uses it to override runtime settings.
-
-Example:
-
-```json
-{
-  "backendApiBaseUrl": "/api"
-}
-```
-
-Default file for local build: `public/config.json`.
-
-In Docker Compose, runtime config is mounted from `./config.json` (repo root) to `/usr/share/nginx/html/config.json`, so you can change configuration without rebuilding the app image.
-
-### 4. Build and test
+## Build e test
 
 ```bash
 npm run build
 npm test
 ```
 
-## Production deployment
+## Produzione
 
-### Option A: Docker (recommended)
-
-Build local image:
-
-```bash
-docker build -t mealer-app:prod ..
-```
-
-Run container:
-
-```bash
-docker run --rm -p 8080:8080 mealer-app:prod
-```
-
-Notes:
-
-- Production app is served by nginx on port `8080`
-- API calls go to same origin under `/api`
-
-### Option B: GitHub Actions + GHCR
-
-Workflow file: `.github/workflows/docker-app-multiarch.yml`
-
-On push to `main` (and on manual trigger), CI builds multi-arch images and publishes to GHCR:
-
-- `ghcr.io/sorge13248/mealer-app:latest`
-- additional tags based on branch/tag/sha
-
-Pull example:
-
-```bash
-docker pull ghcr.io/sorge13248/mealer:latest
-```
-
-If the package is private, authenticate first:
-
-```bash
-docker login ghcr.io
-```
+Il frontend viene incluso nell'immagine app unificata e servito da nginx su porta `8080`.
+Le chiamate API passano in same-origin sotto `/api`.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0.
+This project is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only).
 
-See [LICENSE](LICENSE).
+Copyright (C) 2026 Francesco Sorge.
+
+See [LICENSE](../LICENSE).

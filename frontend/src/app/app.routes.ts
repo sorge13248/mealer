@@ -10,37 +10,47 @@ export const routes: Routes = [
 		loadComponent: () => import('./pages/dispensa/dispensa-page').then((module) => module.DispensaPage)
 	},
 	{
-		path: 'macrocategoria',
+		path: 'dispensa/macro-category',
 		redirectTo: '/dispensa',
 		pathMatch: 'full'
 	},
 	{
-		path: 'macrocategoria/:macroCategory',
+		path: 'dispensa/macro-category/:macroCategory',
 		loadComponent: () =>
-			import('./pages/macro-category/macro-category-page').then((module) => module.MacroCategoryPage)
+			import('./pages/dispensa/macro-category/macro-category-page').then((module) => module.MacroCategoryPage)
 	},
 	{
-		path: 'stock-volatile',
+		path: 'dispensa/stock-volatile',
 		redirectTo: '/dispensa',
 		pathMatch: 'full'
 	},
 	{
-		path: 'stock-volatile/:section',
+		path: 'dispensa/stock-volatile/:section',
 		loadComponent: () =>
-			import('./pages/stock-volatile/stock-volatile-page').then((module) => module.StockVolatilePage)
+			import('./pages/dispensa/stock-volatile/stock-volatile-page').then((module) => module.StockVolatilePage)
 	},
 	{
-		path: 'pianificatore-pasto',
+		path: 'dispensa/gestione-dati',
+		loadComponent: () =>
+			import('./pages/dispensa/gestione-dati/gestione-dati-page').then((module) => module.GestioneDatiPage)
+	},
+	{
+		path: 'meal-planner',
 		loadComponent: () =>
 			import('./pages/meal-planner/meal-planner-page').then((module) => module.MealPlannerPage)
 	},
 	{
 		path: 'spesa',
-		loadComponent: () =>
-			import('./pages/spesa-dashboard/spesa-dashboard-page').then((module) => module.SpesaDashboardPage)
+		redirectTo: '/spesa/dashboard',
+		pathMatch: 'full'
 	},
 	{
-		path: 'spesa/nuova',
-		loadComponent: () => import('./pages/spesa/spesa-page').then((module) => module.SpesaPage)
+		path: 'spesa/dashboard',
+		loadComponent: () =>
+			import('./pages/spesa/dashboard/spesa-dashboard-page').then((module) => module.SpesaDashboardPage)
+	},
+	{
+		path: 'spesa/carica-scontrino',
+		loadComponent: () => import('./pages/spesa/carica-scontrino/spesa-page').then((module) => module.SpesaPage)
 	}
 ];

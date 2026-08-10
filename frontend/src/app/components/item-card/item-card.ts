@@ -12,7 +12,7 @@ import {
   output,
   signal
 } from '@angular/core';
-import { LucideCheck, LucideDynamicIcon } from '@lucide/angular';
+import { LucideCheck, LucideDynamicIcon, LucideExternalLink } from '@lucide/angular';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { ApiEndpointsService } from '../../api/api-endpoints';
@@ -66,6 +66,7 @@ export class ItemCardComponent implements OnInit {
   protected readonly consumeError = signal<string | null>(null);
   protected readonly stockSummaryOverride = signal<ProductStockSummary | null>(null);
   protected readonly checkIcon = LucideCheck;
+  protected readonly openIcon = LucideExternalLink;
 
   protected readonly hasPicture = computed(() => Boolean(this.item().picture_file_name?.trim()));
   protected readonly grocyProductUrl = computed(() => this.apiEndpoints.productPage(this.item().id));

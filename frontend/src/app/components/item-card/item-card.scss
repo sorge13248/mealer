@@ -79,28 +79,34 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--ink-1) 82%, #7fc2ff);
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-  font-size: 0.74rem;
-  font-weight: 600;
-  transition: color 120ms ease;
+  border-radius: 999px;
+  border: 1px solid rgba(51, 122, 183, 0.88);
+  background: rgba(51, 122, 183, 0.24);
+  color: #eef8ff;
+  text-decoration: none;
+  padding: 0.34rem 0.54rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.2;
+  transition: background 120ms ease;
 }
 
 .grocy-link-button:hover {
-  color: #a7d8ff;
+  background: rgba(51, 122, 183, 0.34);
 }
 
 .grocy-link-button:focus-visible {
-  outline: 2px solid rgba(162, 211, 255, 0.96);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .grocy-link-button:active {
-  color: #d4ecff;
+  color: #eef8ff;
+}
+
+.action-icon {
+  width: 0.78rem;
+  height: 0.78rem;
 }
 
 .consume-error {

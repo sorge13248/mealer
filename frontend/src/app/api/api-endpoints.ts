@@ -1,10 +1,8 @@
-import { Injectable, inject } from '@angular/core';
-import { RuntimeConfigService } from '../services/runtime-config.service';
+import { Injectable } from '@angular/core';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ApiEndpointsService {
-  private readonly runtimeConfig = inject(RuntimeConfigService);
-
   products(): string {
     return `${this.apiPrefix}/products`;
   }
@@ -33,35 +31,47 @@ export class ApiEndpointsService {
     return `${this.apiPrefix}/products-page`;
   }
 
+  grocyNewProductPage(): string {
+    return `${this.apiPrefix}/product-new-page`;
+  }
+
+  grocyObject(entity: string, objectId: number): string {
+    return `${this.apiPrefix}/objects/${encodeURIComponent(entity)}/${objectId}`;
+  }
+
+  grocyObjectUserfields(entity: string, objectId: number): string {
+    return `${this.apiPrefix}/userfields/${encodeURIComponent(entity)}/${objectId}`;
+  }
+
   spesaReceiptParse(): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipt/parse`;
+    return `${environment.backendApiBaseUrl}/spesa/receipt/parse`;
   }
 
   spesaMatchCandidates(): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/match/candidates`;
+    return `${environment.backendApiBaseUrl}/spesa/match/candidates`;
   }
 
   spesaMappings(): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/mappings`;
+    return `${environment.backendApiBaseUrl}/spesa/mappings`;
   }
 
   spesaReceiptSave(): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipt/save`;
+    return `${environment.backendApiBaseUrl}/spesa/receipt/save`;
   }
 
   spesaReceipts(page: number, pageSize: number): string {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts?${params.toString()}`;
+    return `${environment.backendApiBaseUrl}/spesa/receipts?${params.toString()}`;
   }
 
   spesaReceiptDetail(receiptId: number): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
+    return `${environment.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
   }
 
   spesaDeleteReceipt(receiptId: number): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
+    return `${environment.backendApiBaseUrl}/spesa/receipts/${receiptId}`;
   }
 
   spesaInsights(days: number, productIds: number[]): string {
@@ -71,10 +81,10 @@ export class ApiEndpointsService {
       params.set('productIds', productIds.join(','));
     }
 
-    return `${this.runtimeConfig.backendApiBaseUrl}/spesa/insights?${params.toString()}`;
+    return `${environment.backendApiBaseUrl}/spesa/insights?${params.toString()}`;
   }
 
   private get apiPrefix(): string {
-    return `${this.runtimeConfig.backendApiBaseUrl}/grocy`;
+    return `${environment.backendApiBaseUrl}/grocy`;
   }
 }

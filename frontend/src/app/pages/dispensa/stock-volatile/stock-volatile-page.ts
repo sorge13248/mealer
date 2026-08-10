@@ -3,12 +3,12 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { map } from 'rxjs';
-import { ApiEndpointsService } from '../../api/api-endpoints';
-import { BackButtonComponent } from '../../components/back-button/back-button';
-import { ItemCardComponent } from '../../components/item-card/item-card';
-import { LoadingSpinnerComponent } from '../../components/loading-spinner/loading-spinner';
-import { withHttpCache } from '../../interceptors/http-cache.interceptor';
-import { Item, ProductStockSummary, getNormalizedYukaScore, toBestBeforeTime, toNumber } from '../shared/product-shared';
+import { ApiEndpointsService } from '../../../api/api-endpoints';
+import { BackButtonComponent } from '../../../components/back-button/back-button';
+import { ItemCardComponent } from '../../../components/item-card/item-card';
+import { LoadingSpinnerComponent } from '../../../components/loading-spinner/loading-spinner';
+import { withHttpCache } from '../../../interceptors/http-cache.interceptor';
+import { Item, ProductStockSummary, getNormalizedYukaScore, toBestBeforeTime, toNumber } from '../../shared/product-shared';
 
 type VolatileSection = 'due' | 'expired' | 'missing';
 

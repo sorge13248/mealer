@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Redirect,
   Res,
 } from '@nestjs/common';
@@ -37,6 +38,24 @@ export class GrocyController {
     @Body() body: unknown,
   ): Promise<unknown> {
     return this.grocyService.consumeProduct(productId, body);
+  }
+
+  @Put('objects/:entity/:objectId')
+  async updateObject(
+    @Param('entity') entity: string,
+    @Param('objectId', ParseIntPipe) objectId: number,
+    @Body() body: unknown,
+  ): Promise<unknown> {
+    return this.grocyService.updateObject(entity, objectId, body);
+  }
+
+  @Put('userfields/:entity/:objectId')
+  async updateObjectUserfields(
+    @Param('entity') entity: string,
+    @Param('objectId', ParseIntPipe) objectId: number,
+    @Body() body: unknown,
+  ): Promise<unknown> {
+    return this.grocyService.updateObjectUserfields(entity, objectId, body);
   }
 
   @Get('files/productpictures/:encodedFileName')
@@ -78,6 +97,14 @@ export class GrocyController {
   redirectToProductsPage(): { url: string } {
     return {
       url: this.grocyService.getProductsPageUrl(),
+    };
+  }
+
+  @Get('product-new-page')
+  @Redirect()
+  redirectToNewProductPage(): { url: string } {
+    return {
+      url: this.grocyService.getNewProductPageUrl(),
     };
   }
 }

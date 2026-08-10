@@ -1,0 +1,293 @@
+<main class="page">
+  <header class="page-header">
+    <app-back-button to=".." label="Indietro" ariaLabel="Torna alla dispensa"></app-back-button>
+    <h1>Gestione dati</h1>
+    <p class="lead">Modifica i prodotti Grocy e salva solo le righe effettivamente cambiate.</p>
+  </header>
+
+  @if (isLoading()) {
+    <section class="status-panel" aria-live="polite" aria-busy="true">
+      <p>Caricamento prodotti...</p>
+    </section>
+  } @else if (loadErrorMessage()) {
+    <section class="status-panel status-panel-error" aria-live="assertive">
+      <p>{{ loadErrorMessage() }}</p>
+      <button type="button" class="retry-button" (click)="retryLoadProducts()">Riprova</button>
+    </section>
+  } @else if (sortedRows().length === 0) {
+    <section class="status-panel" aria-live="polite">
+      <p>Nessun prodotto modificabile trovato.</p>
+    </section>
+  } @else {
+    <section class="table-panel" aria-label="Tabella gestione dati prodotti">
+      <div class="table-wrap">
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th class="image-col hide-mobile" scope="col"></th>
+              <th scope="col">
+                <button type="button" class="sort-button" (click)="toggleSort('name')">
+                  Nome {{ getSortDirectionLabel('name') }}
+                </button>
+              </th>
+              <th scope="col">
+                <div class="column-header-with-action">
+                  <button type="button" class="sort-button" (click)="toggleSort('parentProduct')">
+                    Parent product (qt minima) {{ getSortDirectionLabel('parentProduct') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="header-icon-action"
+                    (click)="reloadProducts()"
+                    [disabled]="isSaving() || isLoading() || isReloadingParentProducts()"
+                    [attr.aria-label]="isReloadingParentProducts() ? 'Ricarica parent product in corso' : 'Ricarica parent product'"
+                  >
+                    <svg [lucideIcon]="refreshIcon" class="action-icon" aria-hidden="true"></svg>
+                  </button>
+                </div>
+              </th>
+              <th scope="col">
+                <button type="button" class="sort-button" (click)="toggleSort('foodMacrocategory')">
+                  Categoria food planner * {{ getSortDirectionLabel('foodMacrocategory') }}
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="sort-button" (click)="toggleSort('yukaScore')">
+                  Yuka score {{ getSortDirectionLabel('yukaScore') }}
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="sort-button" (click)="toggleSort('tastesGood')">
+                  Tastes good {{ getSortDirectionLabel('tastesGood') }}
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="sort-button" (click)="toggleSort('rowCreatedTimestamp')">
+                  Creato il {{ getSortDirectionLabel('rowCreatedTimestamp') }}
+                </button>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (row of paginatedRows(); track row.id) {
+              <tr>
+                <td class="image-col hide-mobile">
+                  @if (getPictureUrl(row.pictureFileName); as pictureUrl) {
+                    <div class="image-hover-wrap">
+                      <img class="thumb" [src]="pictureUrl" [alt]="'Immagine di ' + row.name" loading="lazy" decoding="async" />
+                      <div class="image-preview" aria-hidden="true">
+                        <img [src]="pictureUrl" [alt]="''" loading="lazy" decoding="async" />
+                      </div>
+                    </div>
+                  } @else {
+                    <span class="thumb-placeholder">-</span>
+                  }
+                </td>
+
+                <td>
+                  <div class="name-cell-controls">
+                    <input
+                      type="text"
+                      class="text-input"
+                      [value]="row.name"
+                      (input)="onNameChange(row.id, $event)"
+                      [attr.aria-label]="'Nome prodotto ' + row.name"
+                    />
+                    <a
+                      class="name-open-link"
+                      [href]="getProductEditUrl(row.id)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      [attr.aria-label]="'Apri in modifica il prodotto ' + row.name"
+                    >
+                      <svg [lucideIcon]="openIcon" class="action-icon" aria-hidden="true"></svg>
+                    </a>
+                  </div>
+                </td>
+
+                <td>
+                  <div class="parent-cell-controls">
+                    <select
+                      class="select-input"
+                      [value]="row.parentProductId === null ? '' : row.parentProductId"
+                      (change)="onParentProductChange(row.id, $event)"
+                      [attr.aria-label]="'Parent product di ' + row.name"
+                    >
+                      <option value="" [selected]="row.parentProductId === null">Nessuno</option>
+                      @for (parentProduct of parentProducts(); track parentProduct.id) {
+                        <option [value]="parentProduct.id" [selected]="row.parentProductId === parentProduct.id">
+                          {{ parentProduct.name }} ({{ parentProduct.minStockAmount ?? '-' }})
+                        </option>
+                      }
+                    </select>
+                    <a
+                      class="name-open-link"
+                      [class.name-open-link-disabled]="row.parentProductId === null"
+                      [attr.href]="row.parentProductId === null ? null : getProductEditUrl(row.parentProductId)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      [attr.aria-label]="'Apri in modifica il parent product di ' + row.name"
+                    >
+                      <svg [lucideIcon]="openIcon" class="action-icon" aria-hidden="true"></svg>
+                    </a>
+                  </div>
+                </td>
+
+                <td>
+                  <select
+                    class="select-input"
+                    [class.input-invalid]="isRowChanged(row) && isFoodMacrocategoryMissing(row)"
+                    [value]="row.foodMacrocategory ?? ''"
+                    (change)="onFoodMacrocategoryChange(row.id, $event)"
+                    [attr.aria-label]="'categoria food planner di ' + row.name"
+                  >
+                    <option value="" [selected]="row.foodMacrocategory === null">Nessuna</option>
+                    @for (category of macroCategoryOptions(); track category) {
+                      <option [value]="category" [selected]="row.foodMacrocategory === category">{{ category }}</option>
+                    }
+                  </select>
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    class="number-input"
+                    min="0"
+                    max="100"
+                    step="1"
+                    [value]="row.yukaScore ?? ''"
+                    (input)="onYukaScoreChange(row.id, $event)"
+                    [attr.aria-label]="'Yuka score di ' + row.name"
+                  />
+                </td>
+
+                <td>
+                  <div class="stars-editor" [attr.aria-label]="'Valutazione gusto di ' + row.name">
+                    <button
+                      type="button"
+                      class="clear-stars-button"
+                      [class.clear-stars-button-active]="row.tastesGood === null"
+                      (click)="setTastesGood(row.id, null)"
+                    >
+                      <svg [lucideIcon]="starOffIcon" class="action-icon" aria-hidden="true"></svg>
+                    </button>
+                    @for (star of starOptions; track star) {
+                      <button
+                        type="button"
+                        class="star-button"
+                        [class.star-button-active]="(row.tastesGood ?? 0) >= star"
+                        (click)="setTastesGood(row.id, star)"
+                        [attr.aria-label]="star + ' stelle'"
+                      >
+                        <svg [lucideIcon]="starIcon" class="star-icon" aria-hidden="true"></svg>
+                      </button>
+                    }
+                  </div>
+                </td>
+
+                <td>{{ formatRowCreatedTimestamp(row.rowCreatedTimestamp) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+  }
+
+  <section class="sticky-actions-bar" aria-label="Azioni gestione dati">
+    <div class="sticky-actions-content">
+      <div class="sticky-search-wrap">
+        <label for="products-search" class="sticky-search-label">Cerca prodotto</label>
+        <input
+          id="products-search"
+          type="search"
+          class="sticky-search-input"
+          [value]="searchQuery()"
+          (input)="onSearchQueryChange($event)"
+          placeholder="Nome prodotto (like o fuzzy)"
+          aria-label="Cerca prodotti per nome"
+        />
+      </div>
+
+      <div class="sticky-page-controls">
+        <div class="sticky-page-size-controls">
+          <label for="page-size-select" class="sticky-search-label">Elementi per pagina</label>
+          <select
+            id="page-size-select"
+            class="select-input page-size-select sticky-page-size-select"
+            [value]="pageSize()"
+            (change)="onPageSizeChange($event)"
+          >
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+        </div>
+        <span class="table-pagination-range sticky-page-range">
+          {{ pageStartItemIndex() }}-{{ pageEndItemIndex() }} di {{ totalItems() }}
+        </span>
+        <div class="sticky-pagination-controls">
+          <button
+            type="button"
+            class="secondary-action"
+            (click)="goToPreviousPage()"
+            [disabled]="currentPageSafe() <= 1"
+          >
+            Precedente
+          </button>
+          <span class="table-pagination-page">Pagina {{ currentPageSafe() }} / {{ totalPages() }}</span>
+          <button
+            type="button"
+            class="secondary-action"
+            (click)="goToNextPage()"
+            [disabled]="currentPageSafe() >= totalPages()"
+          >
+            Successiva
+          </button>
+        </div>
+      </div>
+
+      <div class="sticky-actions-buttons">
+        <a
+          class="secondary-action sticky-action-link"
+          [href]="createParentProductUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Crea parent product in Grocy"
+        >
+          <svg [lucideIcon]="newParentProductIcon" class="action-icon" aria-hidden="true"></svg>
+          Nuovo parent product
+        </a>
+        <button
+          type="button"
+          class="primary-action"
+          [class.primary-action-success]="isSaveSuccess()"
+          (click)="saveChanges()"
+          [disabled]="isLoading() || isSaving() || !hasChanges() || hasInvalidChangedRows()"
+        >
+          @if (isSaveSuccess()) {
+            <svg [lucideIcon]="checkIcon" class="action-icon" aria-hidden="true"></svg>
+          } @else {
+            <svg [lucideIcon]="saveIcon" class="action-icon" aria-hidden="true"></svg>
+          }
+          {{ isSaving() ? 'Salvataggio...' : isSaveSuccess() ? 'Salvato' : 'Salva modifiche' }}
+        </button>
+      </div>
+    </div>
+
+    @if (hasInvalidChangedRows()) {
+      <p class="sticky-actions-message save-error" role="alert">
+        categoria food planner e obbligatorio per le righe modificate.
+      </p>
+    }
+
+    @if (saveMessage()) {
+      <p class="sticky-actions-message save-message" role="status">{{ saveMessage() }}</p>
+    }
+    @if (actionErrorMessage()) {
+      <p class="sticky-actions-message save-error" role="alert">{{ actionErrorMessage() }}</p>
+    }
+  </section>
+</main>

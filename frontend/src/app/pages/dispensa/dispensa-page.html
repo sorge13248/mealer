@@ -22,17 +22,17 @@
     @if (hasDueProducts() || hasExpiredProducts() || hasMissingProducts()) {
       <section class="volatile-actions" aria-label="Azioni rapide stock volatile">
         @if (hasDueProducts()) {
-          <a routerLink="/stock-volatile/due" class="volatile-action-button">
+          <a routerLink="/dispensa/stock-volatile/due" class="volatile-action-button">
             In scadenza
           </a>
         }
         @if (hasExpiredProducts()) {
-          <a routerLink="/stock-volatile/expired" class="volatile-action-button volatile-action-button-danger">
+          <a routerLink="/dispensa/stock-volatile/expired" class="volatile-action-button volatile-action-button-danger">
             Scaduti
           </a>
         }
         @if (hasMissingProducts()) {
-          <a routerLink="/stock-volatile/missing" class="volatile-action-button volatile-action-button-warning">
+          <a routerLink="/dispensa/stock-volatile/missing" class="volatile-action-button volatile-action-button-warning">
             Mancanti
           </a>
         }
@@ -45,7 +45,7 @@
           class="category-card"
           [class.category-card-muted]="isVirtualNoMacroCategory(category.key)"
           [attr.aria-label]="category.title"
-          [routerLink]="['/macrocategoria', category.key]"
+          [routerLink]="['/dispensa/macro-category', category.key]"
         >
           <span class="category-title">{{ category.title }}</span>
           @if (category.subtitle) {
@@ -56,4 +56,10 @@
       }
     </section>
   }
+
+  <section class="data-management-section" aria-label="Gestione dati">
+    <a routerLink="gestione-dati" class="data-management-button">
+      Gestione dati
+    </a>
+  </section>
 </main>
