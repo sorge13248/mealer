@@ -9,38 +9,28 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build -- --configuration production
 
-FROM node:22-alpine AS backend-build
+FROM node:slim AS backend-build
 WORKDIR /app/backend
 
-RUN apk add --no-cache --virtual .build-deps python3 make g++
-
 COPY backend/package*.json ./
-RUN npm ci --no-audit --no-fund --ignore-scripts
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 COPY backend/nest-cli.json backend/tsconfig*.json ./
 COPY backend/src ./src
-RUN npm run build
+RUN npm run build \
+    && npm prune --omit=dev --ignore-scripts
 
-FROM node:22-alpine AS backend-prod-deps
-WORKDIR /app/backend
-
-RUN apk add --no-cache --virtual .build-deps python3 make g++
-
-COPY backend/package*.json ./
-RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts \
-    && npm rebuild better-sqlite3 --build-from-source --no-audit --no-fund \
-    && npm cache clean --force \
-    && apk del .build-deps
-
-FROM node:22-alpine AS runtime
+FROM node:slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache nginx supervisor poppler-utils \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx supervisor poppler-utils \
+    && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/backend /app/data /run/nginx /var/log/nginx /usr/share/nginx/html
 
 COPY --from=backend-build /app/backend/dist /app/backend/dist
-COPY --from=backend-prod-deps /app/backend/node_modules /app/backend/node_modules
+COPY --from=backend-build /app/backend/node_modules /app/backend/node_modules
 COPY backend/package*.json /app/backend/
 
 COPY --from=frontend-build /app/frontend/dist/mealer/browser /usr/share/nginx/html
