@@ -2,22 +2,18 @@
   "name": "mealer-monorepo",
   "license": "AGPL-3.0-only",
   "private": true,
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
-    "start:frontend": "npm run start --workspace frontend",
-    "start:backend": "npm run start:dev --workspace backend",
+    "start:frontend": "npm --prefix frontend run start",
+    "start:backend": "npm --prefix backend run start:dev",
     "start:ocr": "bash ./ocr/start-local.sh",
     "start:ocr:tesseract": "OCR_ENGINE=tesseract bash ./ocr/start-local.sh",
     "start:ocr:paddle": "OCR_ENGINE=paddle bash ./ocr/start-local.sh",
     "start:ocr:py311": "OCR_PYTHON_CMD=python3.11 bash ./ocr/start-local.sh",
     "check:ocr": "bash ./ocr/start-local.sh --check",
     "check:ocr:py311": "OCR_PYTHON_CMD=python3.11 bash ./ocr/start-local.sh --check",
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspace backend --if-present",
-    "format": "npm run format --workspace backend --if-present"
+    "build": "npm --prefix frontend run build && npm --prefix backend run build",
+    "test": "npm --prefix frontend run test && npm --prefix backend run test",
+    "lint": "npm --prefix backend run lint --if-present",
+    "format": "npm --prefix backend run format --if-present"
   }
 }
