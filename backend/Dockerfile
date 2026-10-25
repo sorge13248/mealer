@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:slim AS build
+FROM node:lts-slim AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -11,7 +11,7 @@ COPY src ./src
 RUN npm run build \
     && npm prune --omit=dev --ignore-scripts
 
-FROM node:slim AS runtime
+FROM node:lts-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS frontend-build
+FROM node:lts-alpine AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -9,7 +9,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build -- --configuration production
 
-FROM node:slim AS backend-build
+FROM node:lts-slim AS backend-build
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
@@ -20,7 +20,7 @@ COPY backend/src ./src
 RUN npm run build \
     && npm prune --omit=dev --ignore-scripts
 
-FROM node:slim AS runtime
+FROM node:lts-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 

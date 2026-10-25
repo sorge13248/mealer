@@ -1,12 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ReceiptParsingDispatchResult } from './receipt-parser.types';
 
-interface PdfParseResult {
-  text?: string;
+interface PdfParseInstance {
+  getText: () => Promise<{ text?: string }>;
+  destroy?: () => Promise<void>;
+}
+
+interface PdfParseV2Constructor {
+  new (options: { data: Buffer | Uint8Array }): PdfParseInstance;
 }
 
 interface PdfParseModule {
-  default: (input: Buffer) => Promise<PdfParseResult>;
+  default?:
+    ((input: Buffer) => Promise<{ text?: string }>) | PdfParseV2Constructor;
+  PDFParse?: PdfParseV2Constructor;
 }
 
 @Injectable()
@@ -30,11 +37,30 @@ export class CoopOfficialPdfReceiptParserService {
   async extractTextLayer(buffer: Buffer): Promise<string> {
     // Parse embedded textual content without OCR for speed and fidelity.
     try {
-      const pdfModuleCandidate: unknown = await import('pdf-parse');
-      const pdfModule = pdfModuleCandidate as PdfParseModule;
-      const parsed = await pdfModule.default(buffer);
-      const text = typeof parsed.text === 'string' ? parsed.text : '';
-      return this.normalizeText(text);
+      const pdfModule =
+        (await import('pdf-parse')) as unknown as PdfParseModule;
+      if (pdfModule.PDFParse) {
+        const parser = new pdfModule.PDFParse({ data: buffer });
+        try {
+          const parsed = await parser.getText();
+          const text = typeof parsed?.text === 'string' ? parsed.text : '';
+          return this.normalizeText(text);
+        } finally {
+          if (parser.destroy) {
+            await parser.destroy();
+          }
+        }
+      }
+
+      if (typeof pdfModule.default === 'function') {
+        const parsed = await (
+          pdfModule.default as (input: Buffer) => Promise<{ text?: string }>
+        )(buffer);
+        const text = typeof parsed?.text === 'string' ? parsed.text : '';
+        return this.normalizeText(text);
+      }
+
+      return '';
     } catch {
       return '';
     }

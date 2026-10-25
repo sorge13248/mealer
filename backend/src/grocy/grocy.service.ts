@@ -46,7 +46,10 @@ export class GrocyService {
     objectId: number,
     payload: unknown,
   ): Promise<unknown> {
-    return this.put(`api/objects/${encodeURIComponent(entity)}/${objectId}`, payload);
+    return this.put(
+      `api/objects/${encodeURIComponent(entity)}/${objectId}`,
+      payload,
+    );
   }
 
   async updateObjectUserfields(
@@ -54,7 +57,10 @@ export class GrocyService {
     objectId: number,
     payload: unknown,
   ): Promise<unknown> {
-    return this.put(`api/userfields/${encodeURIComponent(entity)}/${objectId}`, payload);
+    return this.put(
+      `api/userfields/${encodeURIComponent(entity)}/${objectId}`,
+      payload,
+    );
   }
 
   async getProductPictureByEncodedName(

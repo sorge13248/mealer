@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ReceiptOcrProvider } from './receipt-ocr-provider.interface';
 
 interface SelfHostedOcrResponse {
-  engine?: unknown;
-  score?: unknown;
-  lines?: unknown;
-  text?: unknown;
+  engine?: string | number | null;
+  score?: string | number | null;
+  lines?: string | number | null;
+  text?: string | null;
 }
 
 const DEFAULT_OCR_HTTP_URL = 'http://mealer-ocr:8000/ocr/receipt/base64';
