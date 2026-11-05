@@ -103,7 +103,6 @@ jobs:
 
           files_to_update = [
               "package.json",
-              "package-lock.json",
               "backend/package.json",
               "backend/package-lock.json",
               "frontend/package.json",
@@ -145,7 +144,7 @@ jobs:
       - name: Commit e push su develop
         run: |
           NEW_VER="${{ steps.versioning.outputs.new_version }}"
-          git add package.json package-lock.json backend/package.json backend/package-lock.json frontend/package.json frontend/package-lock.json frontend/public/sw.js
+          git add package.json backend/package.json backend/package-lock.json frontend/package.json frontend/package-lock.json frontend/public/sw.js
           
           if git diff --staged --quiet; then
             echo "Nessuna modifica da committare su develop."
