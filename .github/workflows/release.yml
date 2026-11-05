@@ -31,11 +31,14 @@ jobs:
 
     steps:
       - name: Verifica autorizzazione utente
+        env:
+          ACTOR: ${{ github.actor }}
+          REPO_OWNER: ${{ github.repository_owner }}
         run: |
-          echo "Workflow avviato da: ${{ github.actor }}"
-          echo "Owner del repository: ${{ github.repository_owner }}"
-          if [ "${{ github.actor }}" != "${{ github.repository_owner }}" ] && [ "${{ github.actor }}" != "sorge13248" ]; then
-            echo "::error::Accesso negato. Solo l'owner del repository (${{ github.repository_owner }}) è autorizzato a lanciare il rilascio."
+          echo "Workflow avviato da: $ACTOR"
+          echo "Owner del repository: $REPO_OWNER"
+          if [ "$ACTOR" != "$REPO_OWNER" ] && [ "$ACTOR" != "sorge13248" ]; then
+            echo "::error::Accesso negato. Solo l'owner del repository ($REPO_OWNER) è autorizzato a lanciare il rilascio."
             exit 1
           fi
 
@@ -54,14 +57,17 @@ jobs:
 
       - name: Calcola nuova versione e aggiorna package.json
         id: versioning
+        env:
+          BUMP_TYPE: ${{ github.event.inputs.bump_type }}
+          CUSTOM_VER: ${{ github.event.inputs.custom_version }}
         run: |
           python3 - << 'EOF'
           import json
           import os
           import sys
 
-          bump_type = """${{ github.event.inputs.bump_type }}""".strip()
-          custom_ver = """${{ github.event.inputs.custom_version }}""".strip().lstrip("v")
+          bump_type = os.environ.get("BUMP_TYPE", "").strip()
+          custom_ver = os.environ.get("CUSTOM_VER", "").strip().lstrip("v")
 
           # Leggi versione attuale dal package.json di root
           with open("package.json", "r", encoding="utf-8") as f:
@@ -121,17 +127,6 @@ jobs:
                   json.dump(data, f, indent=2)
                   f.write("\n")
               print(f"Aggiornato: {file_path} -> {new_ver}")
-
-          # Aggiorna versione in frontend/public/sw.js
-          sw_path = "frontend/public/sw.js"
-          if os.path.exists(sw_path):
-              import re
-              with open(sw_path, "r", encoding="utf-8") as f:
-                  sw_content = f.read()
-              sw_content = re.sub(r"const VERSION = '.*?';", f"const VERSION = '{new_ver}';", sw_content)
-              with open(sw_path, "w", encoding="utf-8") as f:
-                  f.write(sw_content)
-              print(f"Aggiornato: {sw_path} -> {new_ver}")
 
           github_output = os.getenv("GITHUB_OUTPUT")
           if github_output:
@@ -266,7 +261,7 @@ jobs:
           
           echo "Release ${TAG_NAME} creata con successo."
 
-      - name: Avvia pipeline di publish (docker-multiarch)
+      - name: Avvia pipeline di publish (docker-app-multiarch e docker-ocr-multiarch)
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -279,7 +274,8 @@ jobs:
           else
             echo "Release e tag creati con GITHUB_TOKEN standard."
             echo "Avvio esplicito di docker-multiarch via workflow_dispatch..."
-            gh workflow run docker-multiarch.yml --ref "${TAG_NAME}"
+            gh workflow run docker-app-multiarch.yml --ref "${TAG_NAME}"
+            gh workflow run docker-ocr-multiarch.yml --ref "${TAG_NAME}"
           fi
 
       - name: Summary del rilascio
