@@ -23,6 +23,7 @@ permissions:
   contents: write
   packages: write
   actions: write
+  pull-requests: write
 
 jobs:
   release:
@@ -148,13 +149,22 @@ jobs:
             git push origin develop
           fi
 
-      - name: Merge develop in main e push
+      - name: Merge develop in main via pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          NEW_VER: ${{ steps.versioning.outputs.new_version }}
         run: |
-          NEW_VER="${{ steps.versioning.outputs.new_version }}"
+          PR_URL="$(gh pr list --base main --head develop --state open --json url --jq '.[0].url')"
+          if [ -z "${PR_URL}" ]; then
+            PR_URL="$(gh pr create \
+              --base main \
+              --head develop \
+              --title "chore(release): merge develop into main for v${NEW_VER}" \
+              --body "Release v${NEW_VER}: merge the release changes from develop into main.")"
+          fi
+          gh pr merge "${PR_URL}" --merge
+          git fetch origin main
           git checkout -B main origin/main
-          git pull origin main
-          git merge develop --no-ff -m "chore(release): merge develop into main for v${NEW_VER}"
-          git push origin main
 
       - name: Crea GitHub Release
         id: create_release
@@ -290,4 +300,3 @@ jobs:
           * **Release GitHub:** Creata con note automatiche generate dalle PR/commit
           * **Pipeline di publish:** Avviata per la build Docker multi-arch (amd64 / arm64) su GHCR
           EOF
-
