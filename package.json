@@ -15,5 +15,6 @@
     "test": "npm --prefix frontend run test && npm --prefix backend run test",
     "lint": "npm --prefix backend run lint --if-present",
     "format": "npm --prefix backend run format --if-present"
-  }
+  },
+  "version": "1.0.0"
 }
