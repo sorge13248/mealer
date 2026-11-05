@@ -1,0 +1,298 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Tipo di incremento versione'
+        required: true
+        type: choice
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: 'Versione custom (obbligatoria solo se hai scelto "custom", es. 1.2.3)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  actions: write
+
+jobs:
+  release:
+    name: Release & Publish Trigger
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verifica autorizzazione utente
+        run: |
+          echo "Workflow avviato da: ${{ github.actor }}"
+          echo "Owner del repository: ${{ github.repository_owner }}"
+          if [ "${{ github.actor }}" != "${{ github.repository_owner }}" ] && [ "${{ github.actor }}" != "sorge13248" ]; then
+            echo "::error::Accesso negato. Solo l'owner del repository (${{ github.repository_owner }}) è autorizzato a lanciare il rilascio."
+            exit 1
+          fi
+
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configura Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B develop origin/develop
+
+      - name: Calcola nuova versione e aggiorna package.json
+        id: versioning
+        run: |
+          python3 - << 'EOF'
+          import json
+          import os
+          import sys
+
+          bump_type = """${{ github.event.inputs.bump_type }}""".strip()
+          custom_ver = """${{ github.event.inputs.custom_version }}""".strip().lstrip("v")
+
+          # Leggi versione attuale dal package.json di root
+          with open("package.json", "r", encoding="utf-8") as f:
+              root_pkg = json.load(f)
+          current_ver = root_pkg.get("version", "0.0.0")
+
+          if bump_type == "custom":
+              if not custom_ver:
+                  print("::error::Hai selezionato 'custom' ma non hai specificato custom_version!")
+                  sys.exit(1)
+              new_ver = custom_ver
+          else:
+              try:
+                  parts = list(map(int, current_ver.split(".")))
+                  if len(parts) != 3:
+                      raise ValueError("Formato semver deve essere X.Y.Z")
+              except Exception as e:
+                  print(f"::error::Impossibile analizzare la versione attuale '{current_ver}': {e}")
+                  sys.exit(1)
+
+              if bump_type == "major":
+                  parts[0] += 1
+                  parts[1] = 0
+                  parts[2] = 0
+              elif bump_type == "minor":
+                  parts[1] += 1
+                  parts[2] = 0
+              elif bump_type == "patch":
+                  parts[2] += 1
+              else:
+                  print(f"::error::Tipo di incremento sconosciuto: {bump_type}")
+                  sys.exit(1)
+
+              new_ver = ".".join(map(str, parts))
+
+          print(f"Versione precedente: {current_ver}")
+          print(f"Tipo di incremento: {bump_type}")
+          print(f"Nuova versione: {new_ver}")
+
+          files_to_update = [
+              "package.json",
+              "package-lock.json",
+              "backend/package.json",
+              "backend/package-lock.json",
+              "frontend/package.json",
+              "frontend/package-lock.json",
+          ]
+
+          for file_path in files_to_update:
+              if not os.path.exists(file_path):
+                  continue
+              with open(file_path, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+              data["version"] = new_ver
+              if "packages" in data and "" in data["packages"]:
+                  data["packages"][""]["version"] = new_ver
+              with open(file_path, "w", encoding="utf-8") as f:
+                  json.dump(data, f, indent=2)
+                  f.write("\n")
+              print(f"Aggiornato: {file_path} -> {new_ver}")
+
+          # Aggiorna versione in frontend/public/sw.js
+          sw_path = "frontend/public/sw.js"
+          if os.path.exists(sw_path):
+              import re
+              with open(sw_path, "r", encoding="utf-8") as f:
+                  sw_content = f.read()
+              sw_content = re.sub(r"const VERSION = '.*?';", f"const VERSION = '{new_ver}';", sw_content)
+              with open(sw_path, "w", encoding="utf-8") as f:
+                  f.write(sw_content)
+              print(f"Aggiornato: {sw_path} -> {new_ver}")
+
+          github_output = os.getenv("GITHUB_OUTPUT")
+          if github_output:
+              with open(github_output, "a", encoding="utf-8") as f:
+                  f.write(f"previous_version={current_ver}\n")
+                  f.write(f"new_version={new_ver}\n")
+                  f.write(f"tag_name=v{new_ver}\n")
+          EOF
+
+      - name: Commit e push su develop
+        run: |
+          NEW_VER="${{ steps.versioning.outputs.new_version }}"
+          git add package.json package-lock.json backend/package.json backend/package-lock.json frontend/package.json frontend/package-lock.json frontend/public/sw.js
+          
+          if git diff --staged --quiet; then
+            echo "Nessuna modifica da committare su develop."
+          else
+            git commit -m "chore(release): bump version to v${NEW_VER}"
+            git push origin develop
+          fi
+
+      - name: Merge develop in main e push
+        run: |
+          NEW_VER="${{ steps.versioning.outputs.new_version }}"
+          git checkout -B main origin/main
+          git pull origin main
+          git merge develop --no-ff -m "chore(release): merge develop into main for v${NEW_VER}"
+          git push origin main
+
+      - name: Crea GitHub Release
+        id: create_release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          PREV_TAG: "v${{ steps.versioning.outputs.previous_version }}"
+          TAG_NAME: "${{ steps.versioning.outputs.tag_name }}"
+          REPO: "${{ github.repository }}"
+        run: |
+          echo "Generazione note di rilascio da ${PREV_TAG} a ${TAG_NAME}..."
+          
+          python3 - << 'EOF'
+          import json
+          import os
+          import re
+          import subprocess
+          import urllib.request
+
+          prev_tag = os.getenv("PREV_TAG", "").strip()
+          tag_name = os.getenv("TAG_NAME", "").strip()
+          repo = os.getenv("REPO", "").strip()
+          token = os.getenv("GH_TOKEN", "").strip()
+
+          # Determina il range di commit
+          if prev_tag and subprocess.run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{prev_tag}"], capture_output=True).returncode == 0:
+              commit_range = f"{prev_tag}..HEAD"
+              changelog_link = f"https://github.com/{repo}/compare/{prev_tag}...{tag_name}"
+          else:
+              commit_range = "HEAD"
+              changelog_link = f"https://github.com/{repo}/commits/{tag_name}"
+
+          cmd = [
+              "git", "log", commit_range, "--no-merges",
+              "--invert-grep", "--grep=^chore(release)",
+              "--pretty=format:%H\x1f%h\x1f%ae\x1f%an\x1f%s"
+          ]
+          res = subprocess.run(cmd, capture_output=True, text=True)
+          raw_commits = res.stdout.strip().split("\n") if res.stdout.strip() else []
+
+          # Tenta di interrogare la GitHub API per ottenere il mapping SHA -> username GitHub reale
+          author_map = {}
+          if token and repo:
+              try:
+                  api_url = f"https://api.github.com/repos/{repo}/compare/{prev_tag}...main" if (prev_tag and commit_range != "HEAD") else f"https://api.github.com/repos/{repo}/commits?sha=main"
+                  req = urllib.request.Request(api_url, headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": "release-workflow"
+                  })
+                  with urllib.request.urlopen(req, timeout=10) as response:
+                      data = json.load(response)
+                      items = data.get("commits", []) if isinstance(data, dict) else data
+                      for item in items:
+                          sha = item.get("sha")
+                          author = item.get("author")
+                          if sha and author and author.get("login"):
+                              author_map[sha] = author["login"]
+              except Exception as e:
+                  print(f"::warning::GitHub API user mapping failed: {e}")
+
+          lines = []
+          for line in raw_commits:
+              if not line:
+                  continue
+              parts = line.split("\x1f")
+              if len(parts) < 5:
+                  continue
+              full_sha, short_sha, email, name, subject = parts[0], parts[1], parts[2], parts[3], parts[4]
+
+              # Risoluzione dello username:
+              # 1. Login ottenuto direttamente dalla GitHub API
+              # 2. Match sull'email GitHub noreply (es. 12345+username@users.noreply.github.com)
+              # 3. Fallback sul nome Git senza '@' (per non taggare profili GitHub errati)
+              gh_user = author_map.get(full_sha)
+              if not gh_user:
+                  m = re.match(r"^(?:[0-9]+\+)?([^@]+)@users\.noreply\.github\.com$", email)
+                  if m:
+                      gh_user = m.group(1)
+
+              if gh_user:
+                  author_str = f"by @{gh_user}"
+              else:
+                  author_str = f"by {name}"
+
+              commit_url = f"https://github.com/{repo}/commit/{full_sha}"
+              lines.append(f"* {subject} {author_str} in [{short_sha}]({commit_url})")
+
+          with open("release_notes.md", "w", encoding="utf-8") as f:
+              f.write("## What's Changed\n")
+              if lines:
+                  f.write("\n".join(lines) + "\n\n")
+              else:
+                  f.write("* Nessuna modifica rilevante o solo aggiornamenti di manutenzione.\n\n")
+              f.write(f"**Full Changelog**: {changelog_link}\n")
+
+          print(f"Generate note di rilascio con {len(lines)} commit.")
+          EOF
+          
+          echo "Creazione GitHub Release per ${TAG_NAME} su main..."
+          gh release create "${TAG_NAME}" \
+            --target main \
+            --title "${TAG_NAME}" \
+            --notes-file release_notes.md
+          
+          echo "Release ${TAG_NAME} creata con successo."
+
+      - name: Avvia pipeline di publish (docker-multiarch)
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ steps.versioning.outputs.tag_name }}"
+          echo "Avvio della pipeline di publish Docker per il tag ${TAG_NAME}..."
+          
+          if [ -n "${{ secrets.RELEASE_PAT }}" ]; then
+            echo "Release e tag creati con RELEASE_PAT."
+            echo "GitHub Actions avvierà automaticamente docker-multiarch tramite l'evento tag."
+          else
+            echo "Release e tag creati con GITHUB_TOKEN standard."
+            echo "Avvio esplicito di docker-multiarch via workflow_dispatch..."
+            gh workflow run docker-multiarch.yml --ref "${TAG_NAME}"
+          fi
+
+      - name: Summary del rilascio
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🚀 Rilascio completato con successo!
+          
+          * **Versione precedente:** `${{ steps.versioning.outputs.previous_version }}`
+          * **Nuova versione:** `${{ steps.versioning.outputs.new_version }}`
+          * **Tag creato:** `${{ steps.versioning.outputs.tag_name }}`
+          * **Branch aggiornati:** `develop` e `main`
+          * **Release GitHub:** Creata con note automatiche generate dalle PR/commit
+          * **Pipeline di publish:** Avviata per la build Docker multi-arch (amd64 / arm64) su GHCR
+          EOF
+
